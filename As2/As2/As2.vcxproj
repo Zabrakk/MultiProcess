@@ -29,7 +29,16 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="As2.c" />
+    <ClCompile Include="As2.cpp" />
+    <ClCompile Include="CommandQueue.cpp" />
+    <ClCompile Include="Context.cpp" />
+    <ClCompile Include="ErrorCheck.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="CommandQueue.h" />
+    <ClInclude Include="Context.h" />
+    <ClInclude Include="ErrorCheck.h" />
+    <ClInclude Include="example.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{ce994994-17d0-4d63-8af6-06010d1ed704}</ProjectGuid>
