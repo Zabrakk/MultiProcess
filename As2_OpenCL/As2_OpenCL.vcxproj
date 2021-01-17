@@ -28,6 +28,15 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="MatrixFunctions.c" />
+    <ClCompile Include="OpenCLFunctions.c" />
+    <ClCompile Include="OpenCLMatrixAddition.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="MatrixFunctions.h" />
+    <ClInclude Include="OpenCLFunctions.h" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{fc554296-fbc1-4824-8b18-6550c2455898}</ProjectGuid>
     <RootNamespace>As2_OpenCL</RootNamespace>
@@ -184,9 +193,6 @@
       <Command>If exist "*.cl" copy "*.cl" "$(OutDir)\"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="host.cpp" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(INTELOCLSDKROOT)\BuildCustomizations\IntelOpenCL.targets" />
