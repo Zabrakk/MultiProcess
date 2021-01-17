@@ -17,9 +17,9 @@ void pprint(kernel_source* src) {
 
 int main() {
 	// Based on the HelloWorld Report provided from the course
+	cl_device_id device_id = NULL;
 	cl_context context = NULL;
-	cl_device_id dev_id = NULL;
-	cl_command_queue command_q = NULL;
+	cl_command_queue cmd_q = NULL;
 	cl_mem mem_obj = NULL;
 	cl_program program = NULL;
 	cl_platform_id platform_id = NULL;
@@ -28,9 +28,12 @@ int main() {
 
 	// Load the kernel
 	char file_name[] = "add_matrix.cl";
-	kernel_source src = LoadKernel(file_name);
+	kernel_source src = loadKernel(file_name);
+	if (src.ok == 0) return 1;
 
-	getGPUContext();
+	device_id = getGPUDevice();
+	context = getContext(device_id);
+	cmd_q = getCommandQueue(context, device_id);
 
 	printf("\n\n");
 	getchar();
