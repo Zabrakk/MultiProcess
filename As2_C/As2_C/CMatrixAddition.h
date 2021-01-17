@@ -3,6 +3,9 @@
 // Standard include guard
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <sys/timeb.h>
 
 /**
 * \brief Performs element-wise addition for the two given matrices. Prints the elapsed time
@@ -13,8 +16,8 @@
 void Add_Matrix(int** matrix1, int** matrix2);
 
 /**
-* \brief Creates a 100x100 matrix populated with random numbers
-* \return A 2D pointer 100x100 matrix or NULL if not able to create the matrix
+* \brief Creates a NxN matrix populated with random numbers. Value of N is based on the MATRIX_SIZE variable
+* \return A 2D pointer NxN matrix or NULL if not able to create the matrix
 */
 int** Create_Matrix();
 
