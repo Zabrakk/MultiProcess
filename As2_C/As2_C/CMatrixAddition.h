@@ -24,5 +24,11 @@ int** Create_Matrix();
 */
 void Print_Matrix(int** matrix);
 
+/**
+* \brief Frees the memory assigned to a matrix when it was created with Create_Matrix()
+* \return Nothing
+*/
+void Free_Matrix(int** matrix);
+
 // End include guard
 #endif
