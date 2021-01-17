@@ -23,9 +23,15 @@
     <ClCompile Include="CMatrixAddition.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MatrixFunctions.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CMatrixAddition.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MatrixFunctions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
