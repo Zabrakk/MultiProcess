@@ -65,5 +65,3 @@ int main(void) {
     // Program is done
     return 0;
 }
-
-

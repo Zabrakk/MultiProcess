@@ -53,7 +53,7 @@ void Print_Matrix(int** matrix, int matrix_size) {
     for (i = 0; i < matrix_size; i++) {
         printf("[");
         for (j = 0; j < matrix_size; j++) {
-            if (j < matrix_size -1) {
+            if (j < matrix_size - 1) {
                 printf("%d, ", matrix[i][j]);
             }
             else {
