@@ -2,36 +2,17 @@
 #define CMATRIXADDITION_H_INCLUDED
 // Standard include guard
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <sys/timeb.h>
+/************************************************************************
+* THIS FILE IS THE HEADER FOR THE C IMPLEMENTATION OF Add_Matrix(m1, m2)
+************************************************************************/
 
 /**
 * \brief Performs element-wise addition for the two given matrices. Prints the elapsed time
-* \param matrix1 100x100 Matrix created with malloc
-* \param matrix2 100x100 Matrix created with malloc
+* \param matrix1 NxN Matrix created with malloc
+* \param matrix2 NxN Matrix created with malloc
 * \return Nothing
 */
 void Add_Matrix(int** matrix1, int** matrix2);
-
-/**
-* \brief Creates a NxN matrix populated with random numbers. Value of N is based on the MATRIX_SIZE variable
-* \return A 2D pointer NxN matrix or NULL if not able to create the matrix
-*/
-int** Create_Matrix();
-
-/**
-* \brief Prints a given matrix
-* \return Nothing
-*/
-void Print_Matrix(int** matrix);
-
-/**
-* \brief Frees the memory assigned to a matrix when it was created with Create_Matrix()
-* \return Nothing
-*/
-void Free_Matrix(int** matrix);
 
 // End include guard
 #endif
