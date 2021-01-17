@@ -26,7 +26,7 @@ int errorCheck(cl_int err_num) {
 		return 0;
 	}
 	else if (err_num != CL_SUCCESS) {
-		printf("An OpenCL error occured!\n");
+		printf("An OpenCL error occured! Code was: %d\n", err_num);
 		return 0;
 	}
 	return 1;
@@ -157,4 +157,42 @@ cl_command_queue getCommandQueue(cl_context context, cl_device_id device_id) {
 	if (!errorCheck(err_num)) return NULL;
 	// No error occured, return the command queue
 	return cmd_q;
+}
+
+cl_mem getMemoryBuffer(cl_context context, int memory_size) {
+	cl_int err_num = NULL;
+	cl_mem mem_obj;
+
+	// Create the memory buffer
+	mem_obj = clCreateBuffer(context, CL_MEM_READ_WRITE, memory_size * sizeof(int), NULL, &err_num);
+	if (!errorCheck(err_num)) return NULL;
+	// No error occured, return the memory buffer
+	return mem_obj;
+}
+
+cl_program getProgram(cl_context context, cl_device_id device_id, const char** src, const size_t* len) {
+	cl_int err_num = NULL;
+	cl_program program = NULL;
+
+	// Create the Kernel program from source
+	program = clCreateProgramWithSource(context, 1, src, len, &err_num);
+	if (!errorCheck(err_num)) return NULL;
+	// Build the Kernel Program
+	err_num = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
+	if (err_num == CL_BUILD_PROGRAM_FAILURE) {
+		printf("CL_BUILD_PROGRAM_FAILURE!\n");
+		// Determine log size
+		size_t log_size;
+		clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+		// Allocate memory for the log
+		char* log = (char*)malloc(log_size);
+		// Get the log
+		clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+		// Print the log
+		printf("%s\n", log);
+		return NULL;
+	}
+	if (!errorCheck(err_num)) return NULL;
+
+	return program;
 }

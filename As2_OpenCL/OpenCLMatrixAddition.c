@@ -15,6 +15,8 @@ void pprint(kernel_source* src) {
 }
 */
 
+#define MEM_SIZE (128)
+
 int main() {
 	// Based on the HelloWorld Report provided from the course
 	cl_device_id device_id = NULL;
@@ -22,18 +24,27 @@ int main() {
 	cl_command_queue cmd_q = NULL;
 	cl_mem mem_obj = NULL;
 	cl_program program = NULL;
-	cl_platform_id platform_id = NULL;
-	cl_uint num_of_devices, num_of_platforms;
-	cl_int ret;
+	cl_kernel kernel = NULL;
 
 	// Load the kernel
 	char file_name[] = "add_matrix.cl";
 	kernel_source src = loadKernel(file_name);
 	if (src.ok == 0) return 1;
 
+	// Get a GPU ID
 	device_id = getGPUDevice();
+	if (device_id == NULL) return 1;
+	// Create a context for the GPU
 	context = getContext(device_id);
+	if (context == NULL) return 1;
+	// Create a command queue
 	cmd_q = getCommandQueue(context, device_id);
+	if (cmd_q == NULL) return 1;
+	// Create memory buffer
+	mem_obj = getMemoryBuffer(context, MEM_SIZE);
+	if (mem_obj == NULL) return 1;
+	// Create Kernel Program
+	program = getProgram(context, device_id, (const char**)&src.source_str, (const size_t*)&src.source_size);
 
 	printf("\n\n");
 	getchar();

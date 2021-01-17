@@ -60,5 +60,24 @@ cl_context getContext(cl_device_id device_id);
 */
 cl_command_queue getCommandQueue(cl_context context, cl_device_id device_id);
 
+/*
+*\brief Create an OpenCL Memory Buffer
+* \param context OpenCL context
+* \param memory_size Size in bytes to allocate
+* \return Memory object or NULL if failed to create
+*/
+cl_mem getMemoryBuffer(cl_context context, int memory_size);
+
+/*
+* \brief Creates a OpenCL program from a given source. Outputs build log in case of build error
+* \param context OpenCL context
+* \param device_id OpenCL device ID
+* \param Source text
+* \param Size of source
+* \return Program or NUll if failed to create
+*/
+cl_program getProgram(cl_context context, cl_device_id device_id, const char** src, const size_t* len);
+
+
 // End include guard
 #endif
