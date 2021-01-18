@@ -2,7 +2,7 @@
 #include <stdio.h> // Printing output
 #include <stdlib.h> // For rand() and srand()
 #include <time.h> // srand() seed
-#include <sys/timeb.h> // For elapsed time
+#include <Windows.h> // For elapsed time
 // Custom headers
 #include "MatrixFunctions.h"
 #include "CMatrixAddition.h"
@@ -12,14 +12,17 @@
 
 void Add_Matrix(int** matrix1, int** matrix2) {
     /* Sources:
-    * "How to get the time elapsed in C in milliseconds? (Windows)" - https://stackoverflow.com/questions/17250932/how-to-get-the-time-elapsed-in-c-in-milliseconds-windows/17252934
+    * "Acquiring high-resolution time stamps" - https://docs.microsoft.com/en-us/windows/win32/sysinfo/acquiring-high-resolution-time-stamps#using-qpc-in-native-code
     */
     // Initialize variables
-    int i, j, elapsed;
-    struct timeb start, end;
+    int i, j;
+    LARGE_INTEGER start, end, elapsed;
+    LARGE_INTEGER freq;
 
     // Start measurint elapsed time
-    ftime(&start);
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&start);
+
 
     // Perform the element-wise addition of the two matrices, save result to matrix1
     for (i = 0; i < MATRIX_SIZE; i++) {
@@ -28,14 +31,17 @@ void Add_Matrix(int** matrix1, int** matrix2) {
         }
     }
     // Stop measuring, calculation is complete
-    ftime(&end);
-    elapsed = (int)(1000.0 * (end.time - start.time) + (end.millitm - start.millitm));
+    QueryPerformanceCounter(&end);
+    elapsed.QuadPart = end.QuadPart - start.QuadPart;
+
+    elapsed.QuadPart *= 1000000;
+    elapsed.QuadPart /= freq.QuadPart;
 
     // Print the resulting matrix to make sure the program works correctly
     //Print_Matrix(matrix1, MATRIX_SIZE);
 
     // Output the time it took to perform the element-wise addition
-    printf("Matrix calculation took %u milliseconds", elapsed);
+    printf("Matrix calculation took %ld microseconds", elapsed);
 }
 
 int main(void) {
