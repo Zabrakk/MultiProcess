@@ -38,7 +38,7 @@
     <ClInclude Include="OpenCLFunctions.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{fc554296-fbc1-4824-8b18-6550c2455898}</ProjectGuid>
+    <ProjectGuid>{48be0e75-84fe-4544-9bcb-7de1a07b64c7}</ProjectGuid>
     <RootNamespace>As2_OpenCL</RootNamespace>
   </PropertyGroup>
   <!-- Workaround for VS Template engine (latest Windows SDK selection) -->

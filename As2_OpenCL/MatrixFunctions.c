@@ -1,52 +1,31 @@
 #include "MatrixFunctions.h"
 #include <stdlib.h>
+#include <stdio.h>
 
-
-int** Create_Matrix(int matrix_size) {
+int* createMatrix(int matrix_size) {
     /* Sources:
-    * "How To Dynamically Allocate a 2D Array in C" - https://www.youtube.com/watch?v=t72BzxMAQKs
+    * "Malloc a 2D array in C [duplicate]" - https://stackoverflow.com/questions/36890624/malloc-a-2d-array-in-c
     * "Generating random number in a range in C" - https://www.geeksforgeeks.org/generating-random-number-range-c/
     */
-    // Define variables
-    int** matrix;
+    int* matrix;
     int i, j;
-    int min = 0, max = 20; // Random matrix values are between 0 and 20
+    int min = 0;
+    int max = 20;
 
-    // Make sure that the given matrix size is more than 0
-    if (matrix_size < 1) {
-        printf("Matrix can't have 0 elements!\n");
-        return NULL;
-    }
-
-    // Initialize memory for MATRIX_SIZE columns
-    matrix = malloc(matrix_size * sizeof(int*));
-    // Make sure that the memory was actually allocated
-    if (matrix == NULL) {
-        printf("Could not allocate memory for the matrix");
-        return NULL;
-    }
-
-    // Add MATRIX_SIZE rows
-    for (i = 0; i < matrix_size; i++) {
-        matrix[i] = malloc(matrix_size * sizeof(int));
-        // Again, make sure that the memory was actually allocated
-        if (matrix[i] == NULL) {
-            printf("Could not allocate memory for the matrix");
-            return NULL;
-        }
-    }
-
-    // Populate the matrix with random numbers
+    // Allocate memory for the matrix
+    matrix = malloc(matrix_size * matrix_size * sizeof(int));
+    if (matrix == NULL) return NULL;
+    // Populate with numbers
     for (i = 0; i < matrix_size; i++) {
         for (j = 0; j < matrix_size; j++) {
-            matrix[i][j] = (rand() % (max - min + 1)) + min;
+            // Generate random numbers in the range of 0-20
+            matrix[i * matrix_size + j] = (rand() % (max - min + 1)) + min;
         }
     }
     return matrix;
 }
 
-void Print_Matrix(int** matrix, int matrix_size) {
-    //Initialize variables
+void printMatrix(int* matrix, int matrix_size) {
     int i, j;
 
     // Loop over matrix columns and rows to print elements one by one
@@ -54,22 +33,16 @@ void Print_Matrix(int** matrix, int matrix_size) {
         printf("[");
         for (j = 0; j < matrix_size; j++) {
             if (j < matrix_size - 1) {
-                printf("%d, ", matrix[i][j]);
+                printf("%d, ", matrix[i * matrix_size + j]);
             }
             else {
-                printf("%d]\n", matrix[i][j]);
+                printf("%d]\n", matrix[i * matrix_size + j]);
             }
         }
     }
     printf("\n");
 }
 
-void Free_Matrix(int** matrix, int matrix_size) {
-    /* Sources:
-    * "How to free 2d array in C?" - https://stackoverflow.com/questions/5666214/how-to-free-2d-array-in-c
-    */
-    for (int i = 0; i < matrix_size; i++) {
-        free(matrix[i]);
-    }
+void freeMatrix(int* matrix) {
     free(matrix);
 }

@@ -5,69 +5,63 @@
 #include <Windows.h> // For elapsed time
 // Custom headers
 #include "MatrixFunctions.h"
-#include "CMatrixAddition.h"
 
-#define MATRIX_SIZE 100 // Uses 100x100 matrices. Can be changed to make the matrices NxN
+#define SIZE 100
 
+int* Add_Matrix(int* m1, int* m2, int matrix_size) {
+	/* Sources:
+	* "Acquiring high-resolution time stamps" - https://docs.microsoft.com/en-us/windows/win32/sysinfo/acquiring-high-resolution-time-stamps
+	*/
+	int i, j;
+	int* result = createMatrix(matrix_size);
+	LARGE_INTEGER start, end, elapsed;
+	LARGE_INTEGER freq;
 
-void Add_Matrix(int** matrix1, int** matrix2) {
-    /* Sources:
-    * "Acquiring high-resolution time stamps" - https://docs.microsoft.com/en-us/windows/win32/sysinfo/acquiring-high-resolution-time-stamps#using-qpc-in-native-code
-    */
-    // Initialize variables
-    int i, j;
-    LARGE_INTEGER start, end, elapsed;
-    LARGE_INTEGER freq;
+	// Start measurint elapsed time with WINAPI
+	QueryPerformanceFrequency(&freq);
+	QueryPerformanceCounter(&start);
 
-    // Start measurint elapsed time
-    QueryPerformanceFrequency(&freq);
-    QueryPerformanceCounter(&start);
+	// Calculate the addition, store in a new matrix
+	if (result == NULL) return NULL;
+	for (i = 0; i < matrix_size; i++) {
+		for (j = 0; j < matrix_size; j++) {
+			result[i * matrix_size + j] = m1[i * matrix_size + j] + m2[i * matrix_size + j];
+		}
+	}
 
+	// Stop measuring, calculation is complete
+	QueryPerformanceCounter(&end);
+	elapsed.QuadPart = end.QuadPart - start.QuadPart;
+	elapsed.QuadPart *= 1000000;
+	elapsed.QuadPart /= freq.QuadPart;
 
-    // Perform the element-wise addition of the two matrices, save result to matrix1
-    for (i = 0; i < MATRIX_SIZE; i++) {
-        for (j = 0; j < MATRIX_SIZE; j++) {
-            matrix1[i][j] = matrix1[i][j] + matrix2[i][j];
-        }
-    }
-    // Stop measuring, calculation is complete
-    QueryPerformanceCounter(&end);
-    elapsed.QuadPart = end.QuadPart - start.QuadPart;
+	// Output the time it took to perform the element-wise addition
+	printf("Matrix calculation took %ld microseconds\n\n", elapsed);
 
-    elapsed.QuadPart *= 1000000;
-    elapsed.QuadPart /= freq.QuadPart;
-
-    // Print the resulting matrix to make sure the program works correctly
-    //Print_Matrix(matrix1, MATRIX_SIZE);
-
-    // Output the time it took to perform the element-wise addition
-    printf("Matrix calculation took %ld microseconds", elapsed);
+	// Return the result
+	return result;
 }
 
-int main(void) {
-    // Define variables
-    int** matrix1;
-    int** matrix2;
+int main() {
+	// Current time as random number seed
+	srand(time(0));
 
-    // Current time as random number seed
-    srand(time(0));
+	// Create the matrices
+	int* m1 = createMatrix(SIZE);
+	int* m2 = createMatrix(SIZE);
 
-    // Create two random matrices which will be added
-    matrix1 = Create_Matrix(MATRIX_SIZE);
-    matrix2 = Create_Matrix(MATRIX_SIZE);
+	// Print the matrices
+	//printMatrix(m1, SIZE);
+	//printMatrix(m2, SIZE);
 
-    // Print the matrices
-    //Print_Matrix(matrix1, MATRIX_SIZE);
-    //Print_Matrix(matrix2, MATRIX_SIZE);
+	// Calculate the addition
+	int* result = Add_Matrix(m1, m2, SIZE);
+	//printMatrix(result, SIZE);
 
-    // Perform matrix addition with the two previously created matrices
-    Add_Matrix(matrix1, matrix2);
+	// Free the matrices from memory
+	freeMatrix(m1);
+	freeMatrix(m2);
+	freeMatrix(result);
 
-    // Free the memory allocated to the matrices
-    Free_Matrix(matrix1, MATRIX_SIZE);
-    Free_Matrix(matrix2, MATRIX_SIZE);
-    printf("\n\n");
-
-    // Program is done
-    return 0;
+	return 0;
 }

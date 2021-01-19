@@ -3,8 +3,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-/** Most of this file uses this source:
+/** Most of this file uses these sources:
 *** HelloWord Report.pdf from the course
+*** OpenCL Programming Guide from the course
 **/
 
 // OpenCL include
@@ -16,6 +17,7 @@
 
 #define MAX_SOURCE_SIZE (0x001000)
 
+
 int errorCheck(cl_int err_num) {
 	if (err_num == CL_DEVICE_NOT_FOUND) {
 		printf("CL_DEVICE_NOT_FOUND!\n");
@@ -25,13 +27,32 @@ int errorCheck(cl_int err_num) {
 		printf("CL_INVALID_CONTEXT!\n");
 		return 0;
 	}
+	else if (err_num == CL_INVALID_KERNEL_NAME) {
+		printf("CL_INVALID_KERNEL_NAME!\n");
+		return 0;
+	}
+	else if (err_num == CL_INVALID_VALUE) {
+		printf("CL_INVALID_VALUE\n");
+		return 0;
+	}
+	else if (err_num == CL_INVALID_ARG_SIZE) {
+		printf("CL_INVALID_ARG_SIZE\n");
+		return 0;
+	}
+	else if (err_num == CL_INVALID_MEM_OBJECT) {
+		printf("CL_INVALID_MEM_OBJECT\n");
+		return 0;
+	}
+	else if (err_num == CL_INVALID_WORK_GROUP_SIZE) {
+		printf("CL_INVALID_WORK_GROUP_SIZE\n");
+		return 0;
+	}
 	else if (err_num != CL_SUCCESS) {
 		printf("An OpenCL error occured! Code was: %d\n", err_num);
 		return 0;
 	}
 	return 1;
 }
-
 
 kernel_source loadKernel(char file_name[]) {
 	FILE* fp;
@@ -45,14 +66,14 @@ kernel_source loadKernel(char file_name[]) {
 		printf("Failed to load kernel, .cl file not found!\n");
 		return src;
 	}
-	
+
 	src.source_str = (char*)calloc(MAX_SOURCE_SIZE, 1);
 	if (src.source_str == 0) {
 		src.ok = 0;
 		printf("Kernel is empty (source_str = 0)\n");
 		return src;
 	}
-	
+
 	src.source_size = fread(src.source_str, 1, MAX_SOURCE_SIZE, fp);
 	if (src.source_size == 0) {
 		src.ok = 0;
@@ -65,134 +86,38 @@ kernel_source loadKernel(char file_name[]) {
 	return src;
 }
 
-cl_device_id getGPUDevice() {
+void printDeviceInfo(cl_device_id device) {
+	/* Sources:
+	* "List OpenCL platforms and devices" - https://gist.github.com/courtneyfaulkner/7919509
+	*/
 	char* info;
+	cl_device_type type = NULL;
 	size_t info_size;
-	cl_int err_num;
-	cl_uint num_of_platforms = NULL, num_of_devices = NULL;
-	cl_platform_id *platforms = NULL, pid = NULL;
-	cl_device_id *devices = NULL, device = NULL;
 
-	// Get num of platforms
-	//err_num = clGetPlatformIDs(1, NULL, num_of_platforms);
-	err_num = clGetPlatformIDs(1, &pid, &num_of_platforms);
-	if (num_of_platforms == 0 || !errorCheck(err_num)) {
-		printf("No OpenCL platforms found!\n");
-		return NULL;
+	printf("Info about the device being used for the Assignment:\n");
+	// Print device name
+	clGetDeviceInfo(device, CL_DEVICE_NAME, 0, NULL, &info_size);
+	info = (char*)malloc(info_size);
+	clGetDeviceInfo(device, CL_DEVICE_NAME, info_size, info, NULL);
+	printf("Name: %s\n", info);
+	free(info);
+
+	// Print device type
+	clGetDeviceInfo(device, CL_DEVICE_TYPE, sizeof(type), &type, NULL);
+	//type = (int)malloc(info_size);
+	//clGetDeviceInfo(device, CL_DEVICE_TYPE, info_size, type, NULL);
+	if (type == CL_DEVICE_TYPE_GPU) {
+		printf("TYPE: GPU\n");
 	}
-	// Get all platforms
-	platforms = (cl_platform_id*)malloc(sizeof(cl_platform_id) * num_of_platforms);
-	if (platforms == NULL) {
-		printf("No OpenCL platforms found!\n");
-		return NULL;
+	else if (type == CL_DEVICE_TYPE_CPU) {
+		printf("Type: CPU\n");
 	}
-	// Get platform IDs
-	err_num = clGetPlatformIDs(num_of_platforms, platforms, NULL);
-	if (!errorCheck(err_num)) return NULL;
-	// Loop through all the platforms
-	for (int i = 0; i < num_of_platforms; i++) {
 
-		// Get num of GPU devices on current platform
-		err_num = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 0, NULL, &num_of_devices);
-		if (!errorCheck(err_num)) return NULL;
-
-		if (num_of_devices == 0) continue;
-		// Get all GPU devices
-		devices = (cl_device_id*)malloc(sizeof(cl_device_id) * num_of_devices);
-		if (devices == NULL) continue;
-		// Get their IDs
-		err_num = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, num_of_devices, devices, NULL);
-		if (&devices[0] == NULL || !errorCheck(err_num)) continue;
-		
-		// A GPU was found, since no continue was called
-
-		//Print device info
-		printf("Using the following GPU:\n");
-
-		err_num = clGetDeviceInfo(devices[0], CL_DEVICE_NAME, 0, NULL, &info_size);
-		if (!errorCheck(err_num)) continue;
-		info = (char*)malloc(info_size);
-		err_num = clGetDeviceInfo(devices[0], CL_DEVICE_NAME, info_size, info, NULL);
-		if (!errorCheck(err_num)) continue;
-		printf("Name: %s\n", info);
-		free(info);
-
-		clGetDeviceInfo(devices[0], CL_DEVICE_VERSION, 0, NULL, &info_size);
-		info = (char*)malloc(info_size);
-		clGetDeviceInfo(devices[0], CL_DEVICE_VERSION, info_size, info, NULL);
-		printf("OpenCL Version: %s\n", info);
-		free(info);
-
-		clGetDeviceInfo(devices[0], CL_DRIVER_VERSION, 0, NULL, &info_size);
-		info = (char*)malloc(info_size);
-		clGetDeviceInfo(devices[0], CL_DRIVER_VERSION, info_size, info, NULL);
-		printf("Driver software version: %s\n", info);
-		free(info);
-
-		// Return the device
-		device = devices[0];
-		return device;		
-	}
-	// No GPU found
-	return NULL;
-}
-
-cl_context getContext(cl_device_id device_id) {
-	cl_context context = NULL;
-	cl_uint err_num = NULL;
-	
-	// Create OpenCL context for the given device
-	context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &err_num);
-	if (!errorCheck(err_num)) return NULL;
-	// No error occured, return the context
-	return context;
-}
-
-cl_command_queue getCommandQueue(cl_context context, cl_device_id device_id) {
-	cl_int err_num = NULL;
-	cl_command_queue cmd_q = NULL;
-
-	// Create OpenCL command queue for the given parameters
-	cmd_q = clCreateCommandQueue(context, device_id, 0, &err_num);
-	if (!errorCheck(err_num)) return NULL;
-	// No error occured, return the command queue
-	return cmd_q;
-}
-
-cl_mem getMemoryBuffer(cl_context context, int memory_size) {
-	cl_int err_num = NULL;
-	cl_mem mem_obj;
-
-	// Create the memory buffer
-	mem_obj = clCreateBuffer(context, CL_MEM_READ_WRITE, memory_size * sizeof(int), NULL, &err_num);
-	if (!errorCheck(err_num)) return NULL;
-	// No error occured, return the memory buffer
-	return mem_obj;
-}
-
-cl_program getProgram(cl_context context, cl_device_id device_id, const char** src, const size_t* len) {
-	cl_int err_num = NULL;
-	cl_program program = NULL;
-
-	// Create the Kernel program from source
-	program = clCreateProgramWithSource(context, 1, src, len, &err_num);
-	if (!errorCheck(err_num)) return NULL;
-	// Build the Kernel Program
-	err_num = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
-	if (err_num == CL_BUILD_PROGRAM_FAILURE) {
-		printf("CL_BUILD_PROGRAM_FAILURE!\n");
-		// Determine log size
-		size_t log_size;
-		clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
-		// Allocate memory for the log
-		char* log = (char*)malloc(log_size);
-		// Get the log
-		clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
-		// Print the log
-		printf("%s\n", log);
-		return NULL;
-	}
-	if (!errorCheck(err_num)) return NULL;
-
-	return program;
+	// Print OpenCL version
+	clGetDeviceInfo(device, CL_DEVICE_VERSION, 0, NULL, &info_size);
+	info = (char*)malloc(info_size);
+	clGetDeviceInfo(device, CL_DEVICE_VERSION, info_size, info, NULL);
+	printf("OpenCL Version: %s\n", info);
+	free(info);
+	printf("\n");
 }
