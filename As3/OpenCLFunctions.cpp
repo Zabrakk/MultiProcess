@@ -43,11 +43,15 @@ int errorCheck(cl_int err_num) {
 		case CL_INVALID_WORK_GROUP_SIZE:
 			printf("CL_INVALID_WORK_GROUP_SIZE\n");
 			break;
+		case CL_INVALID_HOST_PTR:
+			printf("CL_INVALID_HOST_PTR\n");
+			break;
 		default:
 			printf("An unexpected OpenCL error occured! Code was %d\n", err_num);
-		getchar();
-		return 0;
 	}
+	printf("Enter something to exit: ");
+	getchar();
+	return 0;
 }
 
 kernel_source loadKernel(char file_name[]) {
@@ -103,7 +107,7 @@ void printDeviceInfo(cl_device_id device) {
 	//type = (int)malloc(info_size);
 	//clGetDeviceInfo(device, CL_DEVICE_TYPE, info_size, type, NULL);
 	if (type == CL_DEVICE_TYPE_GPU) {
-		printf("TYPE: GPU\n");
+		printf("Type: GPU\n");
 	}
 	else if (type == CL_DEVICE_TYPE_CPU) {
 		printf("Type: CPU\n");
