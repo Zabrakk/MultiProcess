@@ -104,12 +104,6 @@ int main() {
 	cl_uint num_of_devices;
 
 	cl_mem original_mem = NULL;
-	/*
-	cl_mem red_mem = NULL;
-	cl_mem green_mem = NULL;
-	cl_mem blue_mem = NULL;
-	cl_mem alpha_mem = NULL;
-	*/
 	cl_mem grayscaled_mem = NULL;
 	cl_mem result_mem = NULL;
 
@@ -117,6 +111,7 @@ int main() {
 	kernel_source src = loadKernel(KERNEL_FINE_NAME);
 	if (src.ok == 0) return 1;
 
+	printf("Selecting platform/device\n");
 	// Obtain first OpenCL platform
 	err_num = clGetPlatformIDs(1, &platform_id, &num_of_platforms);
 	if (!errorCheck(err_num)) return 1;
@@ -136,21 +131,10 @@ int main() {
 	cmd_q = clCreateCommandQueue(context, device_id, CL_QUEUE_PROFILING_ENABLE, &err_num);
 
 	// Create memory buffer for original and grayscaled image
-	original_mem = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, w * h * 3 * sizeof(unsigned char), &img[0], &err_num); // ADD *4 HERE?
+	original_mem = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, w * h * 3 * sizeof(unsigned char), &img[0], &err_num);
 	if (!errorCheck(err_num)) return 1;
-	grayscaled_mem = clCreateBuffer(context, CL_MEM_READ_WRITE, w * h * sizeof(unsigned char), NULL, &err_num); // ADD * 2 HERE?
+	grayscaled_mem = clCreateBuffer(context, CL_MEM_READ_WRITE, w * h * sizeof(unsigned char), NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
-
-	/*
-	red_mem = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, w * h * sizeof(unsigned char), &red, &err_num);
-	if (!errorCheck(err_num)) return 1;
-	green_mem = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, w * h * sizeof(unsigned char), &green, &err_num);
-	if (!errorCheck(err_num)) return 1;
-	blue_mem = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, w * h * sizeof(unsigned char), &blue, &err_num);
-	if (!errorCheck(err_num)) return 1;
-	alpha_mem = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, w * h * sizeof(unsigned char), &alpha, &err_num);
-	if (!errorCheck(err_num)) return 1;
-	*/
 
 	// Create the program with Kernel source
 	program = clCreateProgramWithSource(context, 1, (const char**)&src.source_str, (const size_t*)&src.source_size, &err_num);
@@ -176,10 +160,15 @@ int main() {
 	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &grayscaled_mem);
 	if (!errorCheck(err_num)) return 1;
 
-	// Set global and loval work sizes
+	/**********************************************/
+	/*				  GRAYSCALE                   */
+	/**********************************************/
+
+	// Set global and local work sizes
 	size_t global_work_size[1] = { w*h };
-	size_t local_work_size[1] = { 3 }; // Each row is it's own local work group
+	size_t local_work_size[1] = { 18 }; 
 	// Execute the Kernel, give event so execution time can be obtained
+	printf("Executing grayscale Kernel function\n");
 	err_num = clEnqueueNDRangeKernel(cmd_q, kernel, 1, NULL, global_work_size, local_work_size, 0, NULL, &event);
 	if (!errorCheck(err_num)) return 1;
 	// Wait for execution to finish
@@ -189,17 +178,23 @@ int main() {
 	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
 	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
 	double milliseconds = (cl_double)(opencl_end - opencl_start) * (cl_double)(1e-06);
+	printf("Kernel execution done, took %f milliseconds\n\n", milliseconds);
 	// Get the resulting grayscaled image
-	err_num = clEnqueueReadBuffer(cmd_q, grayscaled_mem, CL_TRUE, 0, w * h * sizeof(unsigned char), &grayscaled[0], 0, NULL, NULL); // ADD * 2 HERE?
+	err_num = clEnqueueReadBuffer(cmd_q, grayscaled_mem, CL_TRUE, 0, w * h * sizeof(unsigned char), &grayscaled[0], 0, NULL, NULL);
 	if (!errorCheck(err_num)) return 1;
-	// Output matrix and execution time
-	printf("Kernel execution took %f milliseconds\n", milliseconds);
+
+
+	/**********************************************/
+	/*				  5x5 MASK                    */
+	/**********************************************/
+
+
+
 
 	/**********************************************/
 	/*				  SAVE IMAGE                  */
 	/**********************************************/
 
-	
 	printf("Saving the resulting image as result.png\n");
 	// Start timer
 	QueryPerformanceFrequency(&freq);

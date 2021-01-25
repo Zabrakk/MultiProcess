@@ -58,6 +58,7 @@ kernel_source loadKernel(char file_name[]) {
 	FILE* fp;
 	kernel_source src;
 	src.ok = 1; // Set ok to true
+	printf("Loading OpenCL Kernel\n");
 
 	// Load source code, and store to kernel_source struct
 	fopen_s(&fp, file_name, "r");
@@ -83,6 +84,7 @@ kernel_source loadKernel(char file_name[]) {
 
 	// Close the .cl file and return
 	fclose(fp);
+	printf("OpenCL Kernel loaded\n\n");
 	return src;
 }
 
