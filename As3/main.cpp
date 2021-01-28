@@ -11,7 +11,10 @@
 #include "OpenCLFunctions.h"
 
 #define KERNEL_FINE_NAME "kernel.cl" // Kernel file name
-#define KERNEL_NAME "to_grayscale" // Kernel Function name
+#define GRAYSCALE_NAME "to_grayscale" // Kernel Function name
+#define MASK_NAME "apply_mask"
+#define WIDTH 2988
+#define HEIGHT 2008
 
 /* The code must do the following
 * 1. Load image "im0.png" with lodepng.cpp (DONE)
@@ -44,12 +47,8 @@ int main() {
 	unsigned h = 2008; // Image height
 	char* file_name = "im0.png"; // Name of the image file
 	std::vector<unsigned char> img; // This vector will have w * h * 4 elements representing R,G,B,A
-	std::vector<unsigned char> red(w * h);
-	std::vector<unsigned char> green(w * h);
-	std::vector<unsigned char> blue(w * h);
-	std::vector<unsigned char> alpha(w * h);
 	std::vector<unsigned char> grayscaled(w * h); // Includes the alpha channel so ==> width * height * 2 // ADD * 2 HERE
-	std::vector<unsigned char> result; // The result after the mask goes here
+	std::vector<unsigned char> result(w * h); // The result after the mask goes here
 
 	printf("Loading %s to memory\n", file_name);
 	// Start measurint elapsed time with WINAPI
@@ -70,23 +69,6 @@ int main() {
 	elapsed.QuadPart /= freq.QuadPart;
 	printf("%s loaded to memory. Took %ld microseconds\n\n", file_name, elapsed);
 
-	// Divide image into multiple arrays
-	int j = 0;
-	for (int i = 0; i < img.size(); i += 4) {
-		red[j] = img[i];
-		green[j] = img[i + 1];
-		blue[j] = img[i + 2];
-		alpha[j] = img[i + 3];
-	}
-
-	/* GRAYSCALE THE IMAGE
-	int c = -1, j = 0;
-	for (int i = 0; i < img.size(); i += 4) {
-		grayscaled[j] = (unsigned char)((float)img[i] * 0.299 + (float)img[i + 1] * 0.587 + (float)img[i + 2] * 0.114);
-		grayscaled[j + 1] = img[i + 3];
-		j += 2;
-	}
-	*/
 
 	/**********************************************/
 	/*				  OPENCL                      */
@@ -105,6 +87,8 @@ int main() {
 
 	cl_mem original_mem = NULL;
 	cl_mem grayscaled_mem = NULL;
+	cl_mem width_mem = NULL;
+	cl_mem height_mem = NULL;
 	cl_mem result_mem = NULL;
 
 	// Load Kernel source into memory
@@ -122,48 +106,33 @@ int main() {
 	// Print number of devices on the selected platform
 	printf("Number of devices on the selected platform: %d\n\n", num_of_devices);
 	if (!errorCheck(err_num)) return 1;
-	// Create the context
-	context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &err_num);
-	if (!errorCheck(err_num)) return 1;
 	// Print info about the selected device
 	printDeviceInfo(device_id);
+	// Create the context
+	printf("Creating context\n");
+	context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &err_num);
+	if (!errorCheck(err_num)) return 1;
 	// Create command queue with profiling enabled, so Kernel exewcution time can be obtained
+	printf("Creating command queue\n");
 	cmd_q = clCreateCommandQueue(context, device_id, CL_QUEUE_PROFILING_ENABLE, &err_num);
+	if (!errorCheck(err_num)) return 1;
+	// Create Kernel
+	kernel = createKernel(context, device_id, GRAYSCALE_NAME, (const char**)&src.source_str, (const size_t*)&src.source_size);
+	if (kernel == NULL) return 1;
+
+	/**********************************************/
+	/*				  GRAYSCALE                   */
+	/**********************************************/
 
 	// Create memory buffer for original and grayscaled image
 	original_mem = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, w * h * 3 * sizeof(unsigned char), &img[0], &err_num);
 	if (!errorCheck(err_num)) return 1;
 	grayscaled_mem = clCreateBuffer(context, CL_MEM_READ_WRITE, w * h * sizeof(unsigned char), NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
-
-	// Create the program with Kernel source
-	program = clCreateProgramWithSource(context, 1, (const char**)&src.source_str, (const size_t*)&src.source_size, &err_num);
-	if (!errorCheck(err_num)) return 1;
-	// Build the program
-	err_num = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
-	//Print logs if build failed
-	if (err_num == CL_BUILD_PROGRAM_FAILURE) {
-		size_t log_size;
-		clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
-		// Allocate memory for the log
-		char* log = (char*)malloc(log_size);
-		// Get the log
-		clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
-		// Print the log
-		printf("%s\n", log);
-	}
-	// Create the actual Kernel
-	kernel = clCreateKernel(program, KERNEL_NAME, &err_num);
-	if (!errorCheck(err_num)) return 1;
 	// Give the original and grayscaled image as parameters to the kernel
 	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &original_mem);
 	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &grayscaled_mem);
 	if (!errorCheck(err_num)) return 1;
-
-	/**********************************************/
-	/*				  GRAYSCALE                   */
-	/**********************************************/
-
 	// Set global and local work sizes
 	size_t global_work_size[1] = { w*h };
 	size_t local_work_size[1] = { 18 }; 
@@ -187,9 +156,38 @@ int main() {
 	/**********************************************/
 	/*				  5x5 MASK                    */
 	/**********************************************/
+	// https://stackoverflow.com/questions/44915272/how-opencl-work-with-opencv
+	// https://stackoverflow.com/questions/4880819/logic-for-padding-of-an-image-array
 
+	const unsigned int width = 2998;
+	const unsigned int height = 2008;
 
+	// Create Kernel
+	kernel = createKernel(context, device_id, MASK_NAME, (const char**)&src.source_str, (const size_t*)&src.source_size);
+	if (kernel == NULL) return 1;
+	grayscaled_mem = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, w * h * sizeof(unsigned char), &grayscaled[0], &err_num);
+	if (!errorCheck(err_num)) return 1;
+	result_mem = clCreateBuffer(context, CL_MEM_READ_WRITE, w * h * sizeof(unsigned char), NULL, &err_num);
+	if (!errorCheck(err_num)) return 1;
 
+	// Give the grayscaled image as parameters to the kernel
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &grayscaled_mem);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &result_mem);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(cl_uint), &width);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(cl_uint), &height);
+	if (!errorCheck(err_num)) return 1;
+
+	// Set global and local work sizes
+	size_t global_work_size2[] = { w, h }; // x, y
+	size_t local_work_size2[] = { 4, 4 };
+
+	// Notice that workdim = 2!!!
+	err_num = clEnqueueNDRangeKernel(cmd_q, kernel, 2, NULL, global_work_size2, local_work_size2, 0, NULL, &event);
+	if (!errorCheck(err_num)) return 1;
+	err_num = clEnqueueReadBuffer(cmd_q, result_mem, CL_TRUE, 0, w * h * sizeof(unsigned char), &result[0], 0, NULL, NULL);
+	if (!errorCheck(err_num)) return 1;
+
+	printf("\n");
 
 	/**********************************************/
 	/*				  SAVE IMAGE                  */
@@ -200,7 +198,7 @@ int main() {
 	QueryPerformanceFrequency(&freq);
 	QueryPerformanceCounter(&start);
 	// Encode as PNG, and save to "result.png"
-	lodepng::encode("result.png", grayscaled, w, h, LCT_GREY);
+	lodepng::encode("result.png", result, w, h, LCT_GREY); // grayscaled
 	// Stop timer
 	QueryPerformanceCounter(&end);
 	elapsed.QuadPart = end.QuadPart - start.QuadPart;
