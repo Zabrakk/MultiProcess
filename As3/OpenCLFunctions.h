@@ -40,6 +40,13 @@ int errorCheck(cl_int err_num);
 kernel_source loadKernel(char file_name[]);
 
 /*
+* \brief
+* \param
+* \return OpenCL Kernel or NULL if failed to create
+*/
+cl_kernel createKernel(cl_context context, cl_device_id device_id, char* kernel_name, const char** src, const size_t* size);
+
+/*
 * \brief Prints information about the given OpenCL device
 * \param device cl_device_id of the wanted device
 * \return Nothing

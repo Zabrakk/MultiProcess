@@ -88,6 +88,36 @@ kernel_source loadKernel(char file_name[]) {
 	return src;
 }
 
+cl_kernel createKernel(cl_context context, cl_device_id device_id, char* kernel_name, const char** src, const size_t* size) {
+	cl_kernel kernel = NULL;
+	cl_program program = NULL;
+	cl_int err_num = NULL;
+
+	// Create the program with Kernel source
+	printf("Creating the Kernel for command: %s\n", kernel_name);
+	program = clCreateProgramWithSource(context, 1, src, size, &err_num);
+	if (!errorCheck(err_num)) return NULL;
+	// Build the program
+	err_num = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
+	//Print logs if build failed
+	if (err_num == CL_BUILD_PROGRAM_FAILURE) {
+		size_t log_size;
+		clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+		// Allocate memory for the log
+		char* log = (char*)malloc(log_size);
+		// Get the log
+		clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+		// Print the log
+		printf("%s\n", log);
+	}
+	// Create the actual Kernel
+	kernel = clCreateKernel(program, kernel_name, &err_num);
+	if (!errorCheck(err_num)) return NULL;
+	// Kernel created, return it
+	printf("Kernel created\n");
+	return kernel;
+}
+
 void printDeviceInfo(cl_device_id device) {
 	/* Sources:
 	* "List OpenCL platforms and devices" - https://gist.github.com/courtneyfaulkner/7919509
