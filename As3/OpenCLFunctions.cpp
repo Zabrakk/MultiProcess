@@ -113,8 +113,9 @@ cl_kernel createKernel(cl_context context, cl_device_id device_id, char* kernel_
 	// Create the actual Kernel
 	kernel = clCreateKernel(program, kernel_name, &err_num);
 	if (!errorCheck(err_num)) return NULL;
+	clReleaseProgram(program);
 	// Kernel created, return it
-	printf("Kernel created\n");
+	printf("Kernel created\n"); // Should keep this here?
 	return kernel;
 }
 
