@@ -13,19 +13,7 @@
 #define KERNEL_FINE_NAME "kernel.cl" // Kernel file name
 #define GRAYSCALE_NAME "to_grayscale" // Kernel Function name
 #define MASK_NAME "apply_mask"
-#define WIDTH 2988
-#define HEIGHT 2008
 
-/* The code must do the following
-* 1. Load image "im0.png" with lodepng.cpp (DONE)
-* 2. Convert  to gray scale with a custom function
-* 3. Apply 5x5 moving filter on the gray scaled image with a custom function
-* 4. Save final image, use lodepng.cpp
-* 6. Display platform/device information
-* 7. Display intermediate results for steps 1-4
-* 8. Use profiling to get execution times for each of the tasks 1-4, display result
-* 9. Measure memory usage (OPTIONAL)
-*/
 
 /* Sources:
 * HelloWorld Report.pdf from the course
@@ -41,13 +29,13 @@ int main() {
 	/*				  LOAD IMAGE                  */
 	/**********************************************/
 
+	unsigned int w = 2988; // Image width
+	unsigned int h = 2008; // Image height
+	char* file_name = "im0.png"; // Name of the image file
 	LARGE_INTEGER start, end, elapsed;
 	LARGE_INTEGER freq;
-	unsigned w = 2988; // Image width
-	unsigned h = 2008; // Image height
-	char* file_name = "im0.png"; // Name of the image file
-	std::vector<unsigned char> img; // This vector will have w * h * 4 elements representing R,G,B,A
-	std::vector<unsigned char> grayscaled(w * h); // Includes the alpha channel so ==> width * height * 2 // ADD * 2 HERE
+	std::vector<unsigned char> img; // This vector will have w * h * 3 elements representing R,G,B
+	std::vector<unsigned char> grayscaled(w * h); // w * h sice doesn't include the three colors, only their sum
 	std::vector<unsigned char> result(w * h); // The result after the mask goes here
 
 	printf("Loading %s to memory\n", file_name);
@@ -87,15 +75,13 @@ int main() {
 
 	cl_mem original_mem = NULL;
 	cl_mem grayscaled_mem = NULL;
-	cl_mem width_mem = NULL;
-	cl_mem height_mem = NULL;
 	cl_mem result_mem = NULL;
 
 	// Load Kernel source into memory
 	kernel_source src = loadKernel(KERNEL_FINE_NAME);
 	if (src.ok == 0) return 1;
 
-	printf("Selecting platform/device\n");
+	printf("Selecting platform and device\n");
 	// Obtain first OpenCL platform
 	err_num = clGetPlatformIDs(1, &platform_id, &num_of_platforms);
 	if (!errorCheck(err_num)) return 1;
@@ -116,20 +102,23 @@ int main() {
 	printf("Creating command queue\n");
 	cmd_q = clCreateCommandQueue(context, device_id, CL_QUEUE_PROFILING_ENABLE, &err_num);
 	if (!errorCheck(err_num)) return 1;
-	// Create Kernel
-	kernel = createKernel(context, device_id, GRAYSCALE_NAME, (const char**)&src.source_str, (const size_t*)&src.source_size);
-	if (kernel == NULL) return 1;
+	printf("\n");
 
 	/**********************************************/
 	/*				  GRAYSCALE                   */
 	/**********************************************/
 
+	// Create Kernel
+	kernel = createKernel(context, device_id, GRAYSCALE_NAME, (const char**)&src.source_str, (const size_t*)&src.source_size);
+	if (kernel == NULL) return 1;
 	// Create memory buffer for original and grayscaled image
+	printf("Creating memory objects\n");
 	original_mem = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, w * h * 3 * sizeof(unsigned char), &img[0], &err_num);
 	if (!errorCheck(err_num)) return 1;
 	grayscaled_mem = clCreateBuffer(context, CL_MEM_READ_WRITE, w * h * sizeof(unsigned char), NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
 	// Give the original and grayscaled image as parameters to the kernel
+	printf("Passing arguments to Kernel\n");
 	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &original_mem);
 	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &grayscaled_mem);
 	if (!errorCheck(err_num)) return 1;
@@ -137,7 +126,8 @@ int main() {
 	size_t global_work_size[1] = { w*h };
 	size_t local_work_size[1] = { 18 }; 
 	// Execute the Kernel, give event so execution time can be obtained
-	printf("Executing grayscale Kernel function\n");
+	printf("Executing grayscale Kernel\n");
+	// Only using 1 dimention for this
 	err_num = clEnqueueNDRangeKernel(cmd_q, kernel, 1, NULL, global_work_size, local_work_size, 0, NULL, &event);
 	if (!errorCheck(err_num)) return 1;
 	// Wait for execution to finish
@@ -147,34 +137,36 @@ int main() {
 	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
 	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
 	double milliseconds = (cl_double)(opencl_end - opencl_start) * (cl_double)(1e-06);
-	printf("Kernel execution done, took %f milliseconds\n\n", milliseconds);
+	printf("Kernel execution done, took %f milliseconds\n", milliseconds);
 	// Get the resulting grayscaled image
 	err_num = clEnqueueReadBuffer(cmd_q, grayscaled_mem, CL_TRUE, 0, w * h * sizeof(unsigned char), &grayscaled[0], 0, NULL, NULL);
 	if (!errorCheck(err_num)) return 1;
 
+	// Free the memory used for the original image
+	printf("Freeing memory used for the original image\n");
+	err_num = clReleaseMemObject(original_mem);
+	if (!errorCheck(err_num)) return 1;
+	img = std::vector<unsigned char>();
+	printf("\n");
 
 	/**********************************************/
 	/*				  5x5 MASK                    */
 	/**********************************************/
-	// https://stackoverflow.com/questions/44915272/how-opencl-work-with-opencv
-	// https://stackoverflow.com/questions/4880819/logic-for-padding-of-an-image-array
-
-	const unsigned int width = 2998;
-	const unsigned int height = 2008;
 
 	// Create Kernel
 	kernel = createKernel(context, device_id, MASK_NAME, (const char**)&src.source_str, (const size_t*)&src.source_size);
 	if (kernel == NULL) return 1;
+	printf("Creating memory objects\n");
 	grayscaled_mem = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, w * h * sizeof(unsigned char), &grayscaled[0], &err_num);
 	if (!errorCheck(err_num)) return 1;
 	result_mem = clCreateBuffer(context, CL_MEM_READ_WRITE, w * h * sizeof(unsigned char), NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
-
+	printf("Passing arguments to Kernel\n");
 	// Give the grayscaled image as parameters to the kernel
 	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &grayscaled_mem);
 	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &result_mem);
-	err_num |= clSetKernelArg(kernel, 2, sizeof(cl_uint), &width);
-	err_num |= clSetKernelArg(kernel, 3, sizeof(cl_uint), &height);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(cl_uint), &w); // No need for memory object
+	err_num |= clSetKernelArg(kernel, 3, sizeof(cl_uint), &h);
 	if (!errorCheck(err_num)) return 1;
 
 	// Set global and local work sizes
@@ -182,11 +174,26 @@ int main() {
 	size_t local_work_size2[] = { 4, 4 };
 
 	// Notice that workdim = 2!!!
+	printf("Executing the 5x5 mask Kernel\n");
 	err_num = clEnqueueNDRangeKernel(cmd_q, kernel, 2, NULL, global_work_size2, local_work_size2, 0, NULL, &event);
 	if (!errorCheck(err_num)) return 1;
+	// Wait for execution to finish
+	clWaitForEvents(1, &event);
+	opencl_start = 0, opencl_end = 0;
+	// Calculate execution time
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+	milliseconds = (cl_double)(opencl_end - opencl_start) * (cl_double)(1e-06);
+	printf("Kernel execution done, took %f milliseconds\n", milliseconds);
+	// Read the result
 	err_num = clEnqueueReadBuffer(cmd_q, result_mem, CL_TRUE, 0, w * h * sizeof(unsigned char), &result[0], 0, NULL, NULL);
 	if (!errorCheck(err_num)) return 1;
 
+	// Free the memory used for the grayscaled image
+	printf("Freeing memory used for the grayscaled image\n");
+	err_num = clReleaseMemObject(grayscaled_mem);
+	if (!errorCheck(err_num)) return 1;
+	grayscaled = std::vector<unsigned char>();
 	printf("\n");
 
 	/**********************************************/
@@ -211,7 +218,19 @@ int main() {
 	/*				  FINALIZATION                */
 	/**********************************************/
 
-	//free(img);
+	printf("Finalizing by freeing rest of the memory objects\n");
+	err_num = clFlush(cmd_q);
+	err_num |= clFinish(cmd_q);
+	err_num |= clReleaseEvent(event);
+	err_num |= clReleaseKernel(kernel);
+	err_num |= clReleaseMemObject(result_mem);
+	err_num |= clReleaseDevice(device_id);
+	err_num |= clReleaseCommandQueue(cmd_q);
+	err_num |= clReleaseContext(context);
+
+	free(src.source_str);
+	result = std::vector<unsigned char>();
+
 	printf("Done. Enter a char to exit!\n");
 	getchar();
 	return 0;
