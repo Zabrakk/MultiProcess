@@ -134,8 +134,8 @@ int main() {
 	clWaitForEvents(1, &event);
 	cl_ulong opencl_start = 0, opencl_end = 0;
 	// Calculate execution time
-	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &opencl_start, NULL);
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &opencl_end, NULL);
 	double milliseconds = (cl_double)(opencl_end - opencl_start) * (cl_double)(1e-06);
 	printf("Kernel execution done, took %f milliseconds\n", milliseconds);
 	// Get the resulting grayscaled image
@@ -181,8 +181,8 @@ int main() {
 	clWaitForEvents(1, &event);
 	opencl_start = 0, opencl_end = 0;
 	// Calculate execution time
-	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &opencl_start, NULL);
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &opencl_end, NULL);
 	milliseconds = (cl_double)(opencl_end - opencl_start) * (cl_double)(1e-06);
 	printf("Kernel execution done, took %f milliseconds\n", milliseconds);
 	// Read the result
