@@ -40,8 +40,12 @@ int errorCheck(cl_int err_num);
 kernel_source loadKernel(char file_name[]);
 
 /*
-* \brief
-* \param
+* \brief Creates a Kernel from the given function name and source
+* \param context OpenCL context
+* \param device_id Device to use
+* \param kernel_name Name of the function
+* \param src Kernel source code
+* \param size Size of the Kernel source code
 * \return OpenCL Kernel or NULL if failed to create
 */
 cl_kernel createKernel(cl_context context, cl_device_id device_id, char* kernel_name, const char** src, const size_t* size);
