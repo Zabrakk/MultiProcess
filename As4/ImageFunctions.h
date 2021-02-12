@@ -47,11 +47,15 @@ std::vector<unsigned char> ReadImage(std::string filename, unsigned int w, unsig
 bool WriteImage(std::string filename, std::vector<unsigned char> img, unsigned int w, unsigned int h, LodePNGColorType type);
 
 /*
-* \brief Downscales the given image by 4
+* \brief Downscales the given RGBA image by 4. This is done by dropping pixels
 * \param img Image to downscale
-* \return Downscaled image or NULL if failed
+* \param w Width of the original image
+* \param h Height of the original image
+* \param new_h Pointer to variable where image's new width will be stored
+* \param new_h Pointer to variable where image's new height will be stored
+* \return Downscaled image or an error if failed. (0.0) spooky...
 */
-std::vector<unsigned char> ResizeImage(std::vector<unsigned char> img);
+std::vector<unsigned char> ResizeImage(std::vector<unsigned char> img, unsigned int w, unsigned int h, unsigned int &new_w, unsigned int& new_h);
 
 /*
 * \brief Grayscales the given image RGBA image
