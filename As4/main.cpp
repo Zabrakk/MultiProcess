@@ -6,7 +6,7 @@
 #include "ImageFunctions.h"
 
 #define MIN_DISPARITY 0
-#define MAX_DISPARITY 61
+#define MAX_DISPARITY 55
 #define THRESHOLD 3
 
 int main() {
