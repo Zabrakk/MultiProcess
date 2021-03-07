@@ -102,21 +102,22 @@ int main() {
 	int new_w = floor(w / 4);
 	int new_h = floor(h / 4);
 
-	//cl_mem im0_grayscale = clCreateImage2D(context, CL_MEM_READ_WRITE, &format, new_w, new_h, 0, NULL, &err_num);
-	cl_mem im0_grayscale = clCreateBuffer(context, CL_MEM_READ_WRITE, w * h * sizeof(unsigned char), NULL, &err_num);
+	cl_image_format format_gray;
+	format_gray.image_channel_order = CL_LUMINANCE; // The image was read as RGBA
+	format_gray.image_channel_data_type = CL_UNORM_INT8;
+	cl_mem im0_grayscale = clCreateImage2D(context, CL_MEM_READ_WRITE, &format_gray, new_w, new_h, 0, NULL, &err_num);
+	//cl_mem im0_grayscale = clCreateBuffer(context, CL_MEM_READ_WRITE, w * h * sizeof(unsigned char), NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
 	//cl_mem im1_grayscale = clCreateImage2D(context, CL_MEM_WRITE_ONLY, &format, new_w, new_h, 0, NULL, &err_num);
 	//if (!errorCheck(err_num)) return 1;
 
 	// Give parameters to Kernel
 	printf("Passing parameters to the Kernel\n");
-	err_num = clSetKernelArg(kernel, 0, sizeof(unsigned), &w);
-	err_num |= clSetKernelArg(kernel, 1, sizeof(unsigned), &h);
-	err_num |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &im0_cl);
-	err_num |= clSetKernelArg(kernel, 3, sizeof(cl_mem), &im0_grayscale);
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &im0_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im0_grayscale);
 	if (!errorCheck(err_num)) return 1;
 
-	size_t global_work_size[] = { w, h }; // 32, 32 because Device Max Work Group Size is 1024
+	size_t global_work_size[] = { new_w, new_h }; // 32, 32 because Device Max Work Group Size is 1024
 	size_t local_work_size[] = { 1, 1 }; // 32, 32 because Device Max Work Item Size is 1024 // IF YOU CHANGES THIS T 16, 16, e.g. THIS SHIT STOPS WORKING AT clEnqueueNDRangeKernel
 
 	// Execute the Kernel
@@ -135,10 +136,13 @@ int main() {
 	
 	
 	// Get the resulting grayscaled image
-	std::vector<unsigned char> im0_gray_vector(w * h);
-	err_num = clEnqueueReadBuffer(cmd_q, im0_grayscale, CL_TRUE, 0, w * h * sizeof(unsigned char), &im0_gray_vector[0], 0, NULL, NULL);
+	size_t origin[3] = { 0, 0, 0 };
+	size_t region[3] = { new_w, new_h, 1 };
+	std::vector<unsigned char> im0_gray_vector(new_w * new_h);
+	err_num = clEnqueueReadImage(cmd_q, im0_grayscale, CL_TRUE, origin, region, 0, 0, &im0_gray_vector[0], 0, NULL, NULL);
+	//err_num = clEnqueueReadBuffer(cmd_q, im0_grayscale, CL_TRUE, 0, w * h * sizeof(unsigned char), &im0_gray_vector[0], 0, NULL, NULL);
 
-	lodepng::encode("imgs/test.png", im0_gray_vector, w, h, LCT_GREY);
+	lodepng::encode("imgs/test.png", im0_gray_vector, new_w, new_h, LCT_GREY);
 	//WriteImage("imgs/Resize_test.png", im0_gray_vector, new_w, new_h, LCT_GREY, 0);
 	
 
