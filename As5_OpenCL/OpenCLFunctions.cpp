@@ -46,6 +46,18 @@ int errorCheck(cl_int err_num) {
 	case CL_INVALID_HOST_PTR:
 		printf("CL_INVALID_HOST_PTR\n");
 		break;
+	case CL_IMAGE_FORMAT_NOT_SUPPORTED:
+		printf("CL_IMAGE_FORMAT_NOT_SUPPORTED\n");
+		break;
+	case CL_INVALID_IMAGE_DESCRIPTOR:
+		printf("CL_INVALID_IMAGE_DESCRIPTOR\n");
+		break;
+	case CL_INVALID_IMAGE_SIZE:
+		printf("CL_INVALID_IMAGE_SIZE\n");
+		break;
+	case CL_INVALID_KERNEL:
+		printf("CL_INVALID_KERNEL\n");
+		break;
 	default:
 		printf("An unexpected OpenCL error occured! Code was %d\n", err_num);
 	}
@@ -117,11 +129,6 @@ cl_kernel createKernel(cl_context context, cl_device_id device_id, char* kernel_
 	// Kernel created, return it
 	printf("Kernel created\n"); // Should keep this here?
 	return kernel;
-}
-
-void printCharInfo(cl_device_id device, unsigned info_name) {
-	char* info;
-
 }
 
 void printDeviceInfo(cl_device_id device) {
