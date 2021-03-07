@@ -3,6 +3,7 @@ const sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE |
 						  CLK_ADDRESS_NONE	  |
 						  CLK_FILTER_NEAREST;
 
+						  
 __kernel void resize_and_grayscale(__read_only image2d_t src, __write_only image2d_t dst) {
 	// Reduce given images size by a factor of four
 	// Then grayscale it
@@ -91,5 +92,4 @@ __kernel void calc_zncc(__global const unsigned char* img_left, __global const u
 	}
 	// Add resulting best disparity value to the disparity map
 	dst[y * w + x] = convert_uchar(abs((int)best_disparity)); // Use absolute value of the disparity
-	
 }
