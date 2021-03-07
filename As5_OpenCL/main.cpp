@@ -19,6 +19,7 @@
 #define KERNEL_RESIZE_GRAYSCALE "resize_and_grayscale"
 #define KERNEL_CALCZNCC "calc_zncc"
 #define KERNEL_CROSS_CHECK "cross_check"
+#define KERNEL_OCCLUSION_FILL "occlusion_fill"
 
 int main() {
 	// Image width and height. Both input images are the same size
@@ -289,7 +290,6 @@ int main() {
 	kernel_source cross_check_src = loadKernel("cross_check.cl");
 	if (cross_check_src.ok == 0) return 1;
 
-
 	// Create Kernel
 	kernel = createKernel(context, device_id, KERNEL_CROSS_CHECK, (const char**)&cross_check_src.source_str, (const size_t*)&cross_check_src.source_size);
 	if (kernel == NULL) return 1;
@@ -323,7 +323,44 @@ int main() {
 	err_num = clEnqueueReadBuffer(cmd_q, cross_cl, CL_TRUE, 0, new_w * new_h * sizeof(unsigned char), &cross[0], 0, NULL, NULL);
 	WriteImage("imgs/cross_check.png", cross, new_w, new_h, LCT_GREY, 8);
 
+	/**********************************************/
+	/*				Occlusion Fill                */
+	/**********************************************/
 
+	// Load Kernel source into memory
+	kernel_source occlusion_fill_src = loadKernel("occlusion_fill.cl");
+	if (occlusion_fill_src.ok == 0) return 1;
+
+	// Create Kernel
+	kernel = createKernel(context, device_id, KERNEL_OCCLUSION_FILL, (const char**)&occlusion_fill_src.source_str, (const size_t*)&occlusion_fill_src.source_size);
+	if (kernel == NULL) return 1;
+
+	// Create Buffers for the vectors
+	cl_mem fill_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
+	if (!errorCheck(err_num)) return 1;
+
+	// Give parameters to Kernel
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &cross_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &fill_cl);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &new_w);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &new_h);
+	if (!errorCheck(err_num)) return 1;
+
+	// Execute the Kernel
+	printf("Executing the Occlusion Fill Kernel\n");
+	err_num = clEnqueueNDRangeKernel(cmd_q, kernel, 2, NULL, global_work_size, local_work_size, 0, NULL, &event);
+	if (!errorCheck(err_num)) return 1;
+	// Wait for execution to finish
+	clWaitForEvents(1, &event);
+	opencl_start = 0, opencl_end = 0;
+	// Calculate execution time
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &opencl_start, NULL);
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &opencl_end, NULL);
+	milliseconds = (cl_double)(opencl_end - opencl_start) * (cl_double)(1e-06);
+	printf("Kernel execution done, took %f milliseconds\n", milliseconds);
+
+	err_num = clEnqueueReadBuffer(cmd_q, fill_cl, CL_TRUE, 0, new_w * new_h * sizeof(unsigned char), &fill[0], 0, NULL, NULL);
+	WriteImage("imgs/occlusion_fill.png", fill, new_w, new_h, LCT_GREY, 8);
 
 
 	printf("\nDone! Enter something to exit: ");

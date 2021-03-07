@@ -11,6 +11,5 @@ __kernel void cross_check(__global const unsigned char* left, __global const uns
 		dst[coord] = 0;
 	} else {
 		dst[coord] = right[coord];
-	}
-	
+	}	
 }
