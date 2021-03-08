@@ -109,6 +109,7 @@ int main() {
 	if (occlusion_fill_src.ok == 0) return 1;
 	kernel_source normalize_src = loadKernel(KERNEL_NORMALIZE_FILE_NAME);
 	if (normalize_src.ok == 0) return 1;
+	printf("\n");
 
 	// Select the first platform
 	if (!errorCheck(clGetPlatformIDs(1, &platform_id, &num_of_platforms))) return 1;
@@ -126,7 +127,6 @@ int main() {
 	if (!errorCheck(err_num)) return 1;
 
 	// Create the resize & grayscale kernel
-	printf("Creating Kernel for resizing and grayscaling\n");
 	kernel = createKernel(context, device_id, KERNEL_RESIZE_GRAYSCALE, (const char**)&resize_grayscale_src.source_str, (const size_t*)&resize_grayscale_src.source_size);
 
 	// Format for the OpenCL image objects
@@ -382,7 +382,6 @@ int main() {
 
 	min = *std::min_element(dmap0.begin(), dmap0.end());
 	max = *std::max_element(dmap0.begin(), dmap0.end());
-
 	// Give parameters to Kernel
 	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &dmap0_cl);
 	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &normalized);
@@ -411,7 +410,6 @@ int main() {
 
 	min = *std::min_element(dmap1.begin(), dmap1.end());
 	max = *std::max_element(dmap1.begin(), dmap1.end());
-
 	// Give parameters to Kernel
 	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &dmap1_cl);
 	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &normalized);
@@ -440,7 +438,6 @@ int main() {
 
 	min = *std::min_element(cross.begin(), cross.end());
 	max = *std::max_element(cross.begin(), cross.end());
-
 	// Give parameters to Kernel
 	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &cross_cl);
 	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &normalized);
@@ -469,7 +466,6 @@ int main() {
 
 	min = *std::min_element(fill.begin(), fill.end());
 	max = *std::max_element(fill.begin(), fill.end());
-
 	// Give parameters to Kernel
 	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &fill_cl);
 	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &normalized);
@@ -493,6 +489,40 @@ int main() {
 
 	err_num = clEnqueueReadBuffer(cmd_q, normalized, CL_TRUE, 0, new_w * new_h * sizeof(unsigned char), &fill[0], 0, NULL, NULL);
 	WriteImage("imgs/occlusion_fill_norm.png", fill, new_w, new_h, LCT_GREY, 8);
+
+	/**********************************************/
+	/*				  Free Memory                 */
+	/**********************************************/
+
+	FreeImageVector(im0_gray_vector);
+	FreeImageVector(im1_gray_vector);
+	FreeImageVector(dmap0);
+	FreeImageVector(dmap1);
+	FreeImageVector(cross);
+	FreeImageVector(fill);
+
+	err_num = clFlush(cmd_q);
+	err_num |= clFinish(cmd_q);
+	err_num |= clReleaseEvent(event);
+	err_num |= clReleaseKernel(kernel);
+	err_num |= clReleaseMemObject(im0_cl);
+	err_num |= clReleaseMemObject(im1_cl);
+	err_num |= clReleaseMemObject(im0_gray_cl);
+	err_num |= clReleaseMemObject(im1_gray_cl);
+	err_num |= clReleaseMemObject(dmap0_cl);
+	err_num |= clReleaseMemObject(dmap1_cl);
+	err_num |= clReleaseMemObject(cross_cl);
+	err_num |= clReleaseMemObject(fill_cl);
+	err_num |= clReleaseMemObject(normalized);
+	err_num |= clReleaseDevice(device_id);
+	err_num |= clReleaseCommandQueue(cmd_q);
+	err_num |= clReleaseContext(context);
+
+	free(resize_grayscale_src.source_str);
+	free(calc_zncc_src.source_str);
+	free(cross_check_src.source_str);
+	free(occlusion_fill_src.source_str);
+	free(normalize_src.source_str);
 
 	printf("\nDone! Enter something to exit: ");
 	getchar();

@@ -70,7 +70,7 @@ kernel_source loadKernel(char file_name[]) {
 	FILE* fp;
 	kernel_source src;
 	src.ok = 1; // Set ok to true
-	printf("Loading OpenCL Kernel\n");
+	printf("Loading Kernel file %s\n", file_name);
 
 	// Load source code, and store to kernel_source struct
 	fopen_s(&fp, file_name, "r");
@@ -96,7 +96,7 @@ kernel_source loadKernel(char file_name[]) {
 
 	// Close the .cl file and return
 	fclose(fp);
-	printf("OpenCL Kernel loaded\n\n");
+	printf("OpenCL Kernel loaded\n");
 	return src;
 }
 
@@ -127,7 +127,6 @@ cl_kernel createKernel(cl_context context, cl_device_id device_id, char* kernel_
 	if (!errorCheck(err_num)) return NULL;
 	clReleaseProgram(program);
 	// Kernel created, return it
-	printf("Kernel created\n"); // Should keep this here?
 	return kernel;
 }
 
