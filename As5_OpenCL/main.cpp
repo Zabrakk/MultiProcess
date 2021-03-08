@@ -13,13 +13,23 @@
 #include "lodepng.h"
 #include "ImageFunctions.h"
 #include "OpenCLFunctions.h"
+#include <algorithm>
 
 
-#define KERNEL_FILE_NAME "kernel.cl" // Kernel file name
+#define KERNEL_RESIZE_GRAYSCALE_FILE_NAME "kernels/resize_grayscale.cl" // Kernel file name
 #define KERNEL_RESIZE_GRAYSCALE "resize_and_grayscale"
+
+#define KERNEL_CALCZNCC_FILE_NAME "kernels/calc_zncc.cl"
 #define KERNEL_CALCZNCC "calc_zncc"
+
+#define KERNEL_CROSS_CHECK_FILE_NAME "kernels/cross_check.cl"
 #define KERNEL_CROSS_CHECK "cross_check"
+
+#define KERNEL_OCCLUSION_FILL_FILE_NAME "kernels/occlusion_fill.cl"
 #define KERNEL_OCCLUSION_FILL "occlusion_fill"
+
+#define KERNEL_NORMALIZE_FILE_NAME "kernels/normalize.cl"
+#define KERNEL_NORMALIZE "normalize_img"
 
 int main() {
 	// Image width and height. Both input images are the same size
@@ -41,8 +51,6 @@ int main() {
 	std::vector<unsigned char> dmap1(new_w * new_h);
 	std::vector<unsigned char> cross(new_w * new_h);
 	std::vector<unsigned char> fill(new_w * new_h);
-	// Timing info
-	timer_struct timer;
 
 	/**********************************************/
 	/*  Load images with the original C++ code    */
@@ -77,6 +85,8 @@ int main() {
 	cl_uint num_of_platforms;
 	cl_uint num_of_devices;
 
+	cl_mem im0_cl = NULL, im1_cl = NULL, im0_gray_cl = NULL, im1_gray_cl = NULL, dmap0_cl = NULL, dmap1_cl = NULL, cross_cl = NULL, fill_cl = NULL, normalized = NULL;
+
 	// Timing varaibles
 	double milliseconds = 0;
 	cl_ulong opencl_start = 0, opencl_end = 0;
@@ -88,9 +98,17 @@ int main() {
 	size_t global_work_size[] = { new_w, new_h }; // Use the downscaled image height and width
 	size_t local_work_size[] = { 1, 1 };
 
-	// Load Kernel source into memory
-	kernel_source src = loadKernel(KERNEL_FILE_NAME);
-	if (src.ok == 0) return 1;
+	// Load Kernel sources into memory
+	kernel_source resize_grayscale_src = loadKernel(KERNEL_RESIZE_GRAYSCALE_FILE_NAME);
+	if (resize_grayscale_src.ok == 0) return 1;
+	kernel_source calc_zncc_src = loadKernel(KERNEL_CALCZNCC_FILE_NAME);
+	if (calc_zncc_src.ok == 0) return 1;
+	kernel_source cross_check_src = loadKernel(KERNEL_CROSS_CHECK_FILE_NAME);
+	if (cross_check_src.ok == 0) return 1;
+	kernel_source occlusion_fill_src = loadKernel(KERNEL_OCCLUSION_FILL_FILE_NAME);
+	if (occlusion_fill_src.ok == 0) return 1;
+	kernel_source normalize_src = loadKernel(KERNEL_NORMALIZE_FILE_NAME);
+	if (normalize_src.ok == 0) return 1;
 
 	// Select the first platform
 	if (!errorCheck(clGetPlatformIDs(1, &platform_id, &num_of_platforms))) return 1;
@@ -109,7 +127,7 @@ int main() {
 
 	// Create the resize & grayscale kernel
 	printf("Creating Kernel for resizing and grayscaling\n");
-	kernel = createKernel(context, device_id, KERNEL_RESIZE_GRAYSCALE, (const char**)&src.source_str, (const size_t*)&src.source_size);
+	kernel = createKernel(context, device_id, KERNEL_RESIZE_GRAYSCALE, (const char**)&resize_grayscale_src.source_str, (const size_t*)&resize_grayscale_src.source_size);
 
 	// Format for the OpenCL image objects
 	cl_image_format format;
@@ -118,9 +136,9 @@ int main() {
 
 	// Create a 2D image object for im0 and im1
 	printf("Creating 2D images objects for im0 and im1\n");
-	cl_mem im0_cl = clCreateImage2D(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, &format, w, h, 0, &im0_vector[0], &err_num);
+	im0_cl = clCreateImage2D(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, &format, w, h, 0, &im0_vector[0], &err_num);
 	if (!errorCheck(err_num)) return 1;
-	cl_mem im1_cl = clCreateImage2D(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, &format, w, h, 0, &im1_vector[0], &err_num);
+	im1_cl = clCreateImage2D(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, &format, w, h, 0, &im1_vector[0], &err_num);
 	if (!errorCheck(err_num)) return 1;
 
 	// Create format for grayscale image objects
@@ -128,9 +146,9 @@ int main() {
 	format_gray.image_channel_order = CL_LUMINANCE; // The image was is in grayscale
 	format_gray.image_channel_data_type = CL_UNORM_INT8;
 
-	cl_mem im0_grayscale = clCreateImage2D(context, CL_MEM_READ_WRITE, &format_gray, new_w, new_h, 0, NULL, &err_num);
+	im0_gray_cl = clCreateImage2D(context, CL_MEM_READ_WRITE, &format_gray, new_w, new_h, 0, NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
-	cl_mem im1_grayscale = clCreateImage2D(context, CL_MEM_WRITE_ONLY, &format_gray, new_w, new_h, 0, NULL, &err_num);
+	im1_gray_cl = clCreateImage2D(context, CL_MEM_WRITE_ONLY, &format_gray, new_w, new_h, 0, NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
 
 	printf("\n");
@@ -141,7 +159,7 @@ int main() {
 
 	// Give parameters to Kernel
 	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &im0_cl);
-	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im0_grayscale);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im0_gray_cl);
 	if (!errorCheck(err_num)) return 1;
 
 	// Execute the Kernel
@@ -158,7 +176,7 @@ int main() {
 	printf("Kernel execution done, took %f milliseconds\n", milliseconds);
 	
 	// Get the resulting grayscaled image
-	err_num = clEnqueueReadImage(cmd_q, im0_grayscale, CL_TRUE, origin, region, 0, 0, &im0_gray_vector[0], 0, NULL, NULL);
+	err_num = clEnqueueReadImage(cmd_q, im0_gray_cl, CL_TRUE, origin, region, 0, 0, &im0_gray_vector[0], 0, NULL, NULL);
 
 	if (WriteImage("imgs/im0_gray.png", im0_gray_vector, new_w, new_h, LCT_GREY, 8)) return 1;
 	
@@ -167,7 +185,7 @@ int main() {
 	****/
 
 	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &im1_cl);
-	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im1_grayscale);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im1_gray_cl);
 	if (!errorCheck(err_num)) return 1;
 
 	// Execute the Kernel
@@ -184,7 +202,7 @@ int main() {
 	printf("Kernel execution done, took %f milliseconds\n", milliseconds);
 
 	// Get the resulting grayscaled image
-	err_num = clEnqueueReadImage(cmd_q, im1_grayscale, CL_TRUE, origin, region, 0, 0, &im1_gray_vector[0], 0, NULL, NULL);
+	err_num = clEnqueueReadImage(cmd_q, im1_gray_cl, CL_TRUE, origin, region, 0, 0, &im1_gray_vector[0], 0, NULL, NULL);
 
 	if (WriteImage("imgs/im1_gray.png", im1_gray_vector, new_w, new_h, LCT_GREY, 8)) return 1;
 
@@ -195,37 +213,31 @@ int main() {
 	FreeImageVector(im0_vector);
 	FreeImageVector(im1_vector);
 
-	err_num = clReleaseMemObject(im0_cl);
-	err_num |= clReleaseMemObject(im1_cl);
-	err_num |= clReleaseMemObject(im0_grayscale);
-	err_num |= clReleaseMemObject(im1_grayscale);
-	if (!errorCheck(err_num)) return 1;
 
 	/**********************************************/
 	/*				  CalcZNCC                    */
 	/**********************************************/
 
 	// Create Kernel
-	kernel = createKernel(context, device_id, KERNEL_CALCZNCC, (const char**)&src.source_str, (const size_t*)&src.source_size);
+	kernel = createKernel(context, device_id, KERNEL_CALCZNCC, (const char**)&calc_zncc_src.source_str, (const size_t*)&calc_zncc_src.source_size);
 	if (kernel == NULL) return 1;
 
-	// The resized + grayscaled images are now stored in im[0-1]_gray_vector
 	// Create Buffers for the vectors
-	cl_mem im0_new = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, new_w * new_h * sizeof(unsigned char), &im0_gray_vector[0], &err_num);
+	im0_gray_cl = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, new_w * new_h * sizeof(unsigned char), &im0_gray_vector[0], &err_num);
 	if (!errorCheck(err_num)) return 1;
-	cl_mem im1_new = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, new_w * new_h * sizeof(unsigned char), &im1_gray_vector[0], &err_num);
+	im1_gray_cl = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, new_w * new_h * sizeof(unsigned char), &im1_gray_vector[0], &err_num);
 	if (!errorCheck(err_num)) return 1;
-	cl_mem dmap0_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
+	dmap0_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
-	cl_mem dmap1_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
+	dmap1_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
 
 	/****
 	* im0 left + im1 right
 	****/
 	// Give parameters to Kernel
-	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &im0_new);
-	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im1_new);
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &im0_gray_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im1_gray_cl);
 	err_num |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &dmap0_cl);
 	err_num |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &new_w);
 	err_num |= clSetKernelArg(kernel, 4, sizeof(unsigned int), &new_h);
@@ -255,8 +267,8 @@ int main() {
 	* im1 left + im0 right
 	****/
 	// Give parameters to Kernel
-	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &im1_new);
-	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im0_new);
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &im1_gray_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im0_gray_cl);
 	err_num |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &dmap1_cl);
 	err_num |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &new_w);
 	err_num |= clSetKernelArg(kernel, 4, sizeof(unsigned int), &new_h);
@@ -286,16 +298,12 @@ int main() {
 	/*				  CrossCheck                  */
 	/**********************************************/
 
-	// Load Kernel source into memory
-	kernel_source cross_check_src = loadKernel("cross_check.cl");
-	if (cross_check_src.ok == 0) return 1;
-
 	// Create Kernel
 	kernel = createKernel(context, device_id, KERNEL_CROSS_CHECK, (const char**)&cross_check_src.source_str, (const size_t*)&cross_check_src.source_size);
 	if (kernel == NULL) return 1;
 
 	// Create Buffers for the vectors
-	cl_mem cross_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
+	cross_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
 
 	// Give parameters to Kernel
@@ -327,16 +335,12 @@ int main() {
 	/*				Occlusion Fill                */
 	/**********************************************/
 
-	// Load Kernel source into memory
-	kernel_source occlusion_fill_src = loadKernel("occlusion_fill.cl");
-	if (occlusion_fill_src.ok == 0) return 1;
-
 	// Create Kernel
 	kernel = createKernel(context, device_id, KERNEL_OCCLUSION_FILL, (const char**)&occlusion_fill_src.source_str, (const size_t*)&occlusion_fill_src.source_size);
 	if (kernel == NULL) return 1;
-
+	
 	// Create Buffers for the vectors
-	cl_mem fill_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
+	fill_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
 
 	// Give parameters to Kernel
@@ -362,6 +366,133 @@ int main() {
 	err_num = clEnqueueReadBuffer(cmd_q, fill_cl, CL_TRUE, 0, new_w * new_h * sizeof(unsigned char), &fill[0], 0, NULL, NULL);
 	WriteImage("imgs/occlusion_fill.png", fill, new_w, new_h, LCT_GREY, 8);
 
+	/**********************************************/
+	/*				  Normalize                   */
+	/**********************************************/
+
+	unsigned int min = 0, max = 0;
+	normalized = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
+	if (!errorCheck(err_num)) return 1;
+
+	// Create Kernel
+	kernel = createKernel(context, device_id, KERNEL_NORMALIZE, (const char**)&normalize_src.source_str, (const size_t*)&normalize_src.source_size);
+	if (kernel == NULL) return 1;
+
+	// dmap0
+
+	min = *std::min_element(dmap0.begin(), dmap0.end());
+	max = *std::max_element(dmap0.begin(), dmap0.end());
+
+	// Give parameters to Kernel
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &dmap0_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &normalized);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &new_w);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &min);
+	err_num |= clSetKernelArg(kernel, 4, sizeof(unsigned int), &max);
+	if (!errorCheck(err_num)) return 1;
+	
+	// Execute the Kernel
+	printf("Executing the Normalization Kernel on dmap0\n");;
+	err_num = clEnqueueNDRangeKernel(cmd_q, kernel, 2, NULL, global_work_size, local_work_size, 0, NULL, &event);
+	if (!errorCheck(err_num)) return 1;
+	// Wait for execution to finish
+	clWaitForEvents(1, &event);
+	opencl_start = 0, opencl_end = 0;
+	// Calculate execution time
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &opencl_start, NULL);
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &opencl_end, NULL);
+	milliseconds = (cl_double)(opencl_end - opencl_start) * (cl_double)(1e-06);
+	printf("Kernel execution done, took %f milliseconds\n", milliseconds);
+
+	err_num = clEnqueueReadBuffer(cmd_q, normalized, CL_TRUE, 0, new_w * new_h * sizeof(unsigned char), &dmap0[0], 0, NULL, NULL);
+	WriteImage("imgs/im0_disparity_norm.png", dmap0, new_w, new_h, LCT_GREY, 8);
+
+	// dmap1
+
+	min = *std::min_element(dmap1.begin(), dmap1.end());
+	max = *std::max_element(dmap1.begin(), dmap1.end());
+
+	// Give parameters to Kernel
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &dmap1_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &normalized);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &new_w);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &min);
+	err_num |= clSetKernelArg(kernel, 4, sizeof(unsigned int), &max);
+	if (!errorCheck(err_num)) return 1;
+
+	// Execute the Kernel
+	printf("Executing the Normalization Kernel on dmap1\n");
+	err_num = clEnqueueNDRangeKernel(cmd_q, kernel, 2, NULL, global_work_size, local_work_size, 0, NULL, &event);
+	if (!errorCheck(err_num)) return 1;
+	// Wait for execution to finish
+	clWaitForEvents(1, &event);
+	opencl_start = 0, opencl_end = 0;
+	// Calculate execution time
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &opencl_start, NULL);
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &opencl_end, NULL);
+	milliseconds = (cl_double)(opencl_end - opencl_start) * (cl_double)(1e-06);
+	printf("Kernel execution done, took %f milliseconds\n", milliseconds);
+
+	err_num = clEnqueueReadBuffer(cmd_q, normalized, CL_TRUE, 0, new_w * new_h * sizeof(unsigned char), &dmap1[0], 0, NULL, NULL);
+	WriteImage("imgs/im1_disparity_norm.png", dmap1, new_w, new_h, LCT_GREY, 8);
+
+	// Cross Check
+
+	min = *std::min_element(cross.begin(), cross.end());
+	max = *std::max_element(cross.begin(), cross.end());
+
+	// Give parameters to Kernel
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &cross_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &normalized);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &new_w);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &min);
+	err_num |= clSetKernelArg(kernel, 4, sizeof(unsigned int), &max);
+	if (!errorCheck(err_num)) return 1;
+
+	// Execute the Kernel
+	printf("Executing the Normalization Kernel on Cross Check image\n");
+	err_num = clEnqueueNDRangeKernel(cmd_q, kernel, 2, NULL, global_work_size, local_work_size, 0, NULL, &event);
+	if (!errorCheck(err_num)) return 1;
+	// Wait for execution to finish
+	clWaitForEvents(1, &event);
+	opencl_start = 0, opencl_end = 0;
+	// Calculate execution time
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &opencl_start, NULL);
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &opencl_end, NULL);
+	milliseconds = (cl_double)(opencl_end - opencl_start) * (cl_double)(1e-06);
+	printf("Kernel execution done, took %f milliseconds\n", milliseconds);
+
+	err_num = clEnqueueReadBuffer(cmd_q, normalized, CL_TRUE, 0, new_w * new_h * sizeof(unsigned char), &cross[0], 0, NULL, NULL);
+	WriteImage("imgs/cross_check_norm.png", cross, new_w, new_h, LCT_GREY, 8);
+
+	// Occlusion fill
+
+	min = *std::min_element(fill.begin(), fill.end());
+	max = *std::max_element(fill.begin(), fill.end());
+
+	// Give parameters to Kernel
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &fill_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &normalized);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &new_w);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &min);
+	err_num |= clSetKernelArg(kernel, 4, sizeof(unsigned int), &max);
+	if (!errorCheck(err_num)) return 1;
+
+	// Execute the Kernel
+	printf("Executing the Normalization Kernel on Occlusion Fill image\n");
+	err_num = clEnqueueNDRangeKernel(cmd_q, kernel, 2, NULL, global_work_size, local_work_size, 0, NULL, &event);
+	if (!errorCheck(err_num)) return 1;
+	// Wait for execution to finish
+	clWaitForEvents(1, &event);
+	opencl_start = 0, opencl_end = 0;
+	// Calculate execution time
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &opencl_start, NULL);
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &opencl_end, NULL);
+	milliseconds = (cl_double)(opencl_end - opencl_start) * (cl_double)(1e-06);
+	printf("Kernel execution done, took %f milliseconds\n", milliseconds);
+
+	err_num = clEnqueueReadBuffer(cmd_q, normalized, CL_TRUE, 0, new_w * new_h * sizeof(unsigned char), &fill[0], 0, NULL, NULL);
+	WriteImage("imgs/occlusion_fill_norm.png", fill, new_w, new_h, LCT_GREY, 8);
 
 	printf("\nDone! Enter something to exit: ");
 	getchar();
