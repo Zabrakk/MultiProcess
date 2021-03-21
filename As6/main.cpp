@@ -48,11 +48,35 @@ int main() {
 	// Calculate ZNCC
 	printf("Calculating ZNCC, left=im0, right=im1\n");
 	std::vector<unsigned char> im0_zncc = CalcZNCC(im0_gray, im1_gray, w, h, WINDOW_Y, WINDOW_X, MIN_DISPARITY, MAX_DISPARITY);
+	printf("Calculating ZNCC, left=im1, right=im0\n");
+	std::vector<unsigned char> im1_zncc = CalcZNCC(im1_gray, im0_gray, w, h, WINDOW_Y, WINDOW_X, -MAX_DISPARITY, MIN_DISPARITY);
 	printf("\n");
 
-	// Save result
-	WriteImage(im0_zncc, "imgs/result.png", w, h, LCT_GREY, 8);
+	// Cross Check
+	printf("Performing the cross check\n");
+	std::vector<unsigned char> cross = CrossCheck(im0_zncc, im1_zncc, w, h, THRESHOLD);
+	printf("\n");
 
+	// Occlusion Fill
+	printf("Performing the occlusion fill\n");
+	std::vector<unsigned char> fill = OcclusionFill(cross, w, h);
+	printf("\n");
+
+	// Image Normalization
+	printf("Normalizing the images\n");
+	im0_zncc = NormalizeImage(im0_zncc, w, h);
+	im1_zncc = NormalizeImage(im1_zncc, w, h);
+	cross = NormalizeImage(cross, w, h);
+	fill = NormalizeImage(fill, w, h);
+	printf("\n");
+
+	// Save results
+	WriteImage(im0_zncc, "imgs/im0_zncc_norm.png", w, h, LCT_GREY, 8);
+	WriteImage(im1_zncc, "imgs/im1_zncc_norm.png", w, h, LCT_GREY, 8);
+	WriteImage(cross, "imgs/cross_check_norm.png", w, h, LCT_GREY, 8);
+	WriteImage(fill, "imgs/occlusion_fill_norm.png", w, h, LCT_GREY, 8);
+
+	// And we are done
 	printf("\nDone!\n");
 	return 0;
 }
