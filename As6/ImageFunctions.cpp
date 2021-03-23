@@ -115,76 +115,83 @@ std::vector<unsigned char> CalcZNCC(std::vector<unsigned char> img_left, std::ve
 	std::vector<unsigned char> disparity_map(w * h);
 	int window_size = window_y * window_x; // Size of the whole window
 
+	// Create a vector with all coordinates in the image, this will be used for by threads
+	std::vector<std::vector<int>> all_coords(h*w, std::vector<int>(2));
+	for (int y = 0; y < h; y++) {
+		for (int x = 0; x < w; x++) {
+			all_coords[y*w+x] = { y, x };
+		}
+	}
+
 	timer_struct timer;
 	StartTimer(&timer);
 
 	#pragma omp parallel for num_threads(3)
-	for (int y = 0; y < h; y++) { // Loop to image height
-		// Declare here so the variables are private for each thread
+	for (int i = 0; i < all_coords.size(); i++) {
+		// Declare variables here so they are private for each thread, and omp private(...) doesn't need to be used
+		int y = all_coords[i][0];
+		int x = all_coords[i][1];
 		int win_y, win_x;
 		float lw_mean, rw_mean; // Left and right image mean
 		float lw_mean_diff, rw_mean_diff; // Pixel difference from the mean
 		float lower_sum_0, lower_sum_1, upper_sum;
-		float zncc_val, max_sum, best_disparity;
+		float zncc_val;
+		float max_sum = -1; // Start with a small number, so values can update
+		float best_disparity = max_disparity;
 
-		for (int x = 0; x < w; x++) { // Loop to image width
+		for (int d = min_disparity; d < max_disparity; d++) { // Loop to maximum disparity value
 			// Reset
-			float max_sum = -1; // Start with a small number, so values can update
-			float best_disparity = max_disparity;
-
-			for (int d = min_disparity; d < max_disparity; d++) { // Loop to maximum disparity value
-				// Reset
-				lw_mean = 0, rw_mean = 0;
-				// Mean for each window. Based on the equation, window_x & window_y should be divided by 2
-				for (win_y = -window_y / 2; win_y < window_y / 2; win_y++) {
-					for (win_x = -window_x / 2; win_x < window_x / 2; win_x++) {
-						// Make sure we are inside the image boundries
-						if (win_y + y < 0 || win_y + y >= h || win_x + x < 0 || win_x + x - d < 0 || win_x + x >= w || win_x + x - d >= w) {
-							// Outside of image, go to next iteration
-							continue;
-						}
-						// Add current pixel value
-						lw_mean += img_left[(win_y + y) * w + (win_x + x)];
-						rw_mean += img_right[(win_y + y) * w + (win_x + x - d)];
+			lw_mean = 0, rw_mean = 0;
+			// Mean for each window. Based on the equation, window_x & window_y should be divided by 2
+			for (win_y = -window_y / 2; win_y < window_y / 2; win_y++) {
+				for (win_x = -window_x / 2; win_x < window_x / 2; win_x++) {
+					// Make sure we are inside the image boundries
+					if (win_y + y < 0 || win_y + y >= h || win_x + x < 0 || win_x + x - d < 0 || win_x + x >= w || win_x + x - d >= w) {
+						// Outside of image, go to next iteration
+						continue;
 					}
-				}
-				// Calculate the window means by dividing summed values with the window's size
-				lw_mean = lw_mean / window_size;
-				rw_mean = rw_mean / window_size;
-
-				//Reset
-				upper_sum = 0, lower_sum_0 = 0, lower_sum_1 = 0, zncc_val = 0;
-
-				// Calculate ZNCC using the same window loops
-				for (win_y = -window_y / 2; win_y < window_y / 2; win_y++) {
-					for (win_x = -window_x / 2; win_x < window_x / 2; win_x++) {
-						// Make sure we are inside the image boundries
-						if (win_y + y < 0 || win_y + y >= h || win_x + x < 0 || win_x + x - d < 0 || win_x + x >= w || win_x + x - d >= w) {
-							// Outside of image, go to next iteration
-							continue;
-						}
-						// Get pixel mean differences for both images
-						lw_mean_diff = img_left[(win_y + y) * w + (win_x + x)] - lw_mean;
-						rw_mean_diff = img_right[(win_y + y) * w + (win_x + x - d)] - rw_mean;
-						// Lower Sum calculation
-						lower_sum_0 += lw_mean_diff * lw_mean_diff;
-						lower_sum_1 += rw_mean_diff * rw_mean_diff;
-						// Upper Sum calculation
-						upper_sum += lw_mean_diff * rw_mean_diff;
-					}
-				}
-				// Calculating the ZNCC value with upper and lower sum
-				zncc_val = upper_sum / (sqrt(lower_sum_0) * sqrt(lower_sum_1));
-				// Check if maximum sum and best disparity should be updated based on current zncc value
-				if (zncc_val > max_sum) {
-					best_disparity = d;
-					max_sum = zncc_val;
+					// Add current pixel value
+					lw_mean += img_left[(win_y + y) * w + (win_x + x)];
+					rw_mean += img_right[(win_y + y) * w + (win_x + x - d)];
 				}
 			}
-			// Add resulting best disparity value to the disparity map
-			disparity_map[y * w + x] = abs(best_disparity); // Use absolute value of the disparity
+			// Calculate the window means by dividing summed values with the window's size
+			lw_mean = lw_mean / window_size;
+			rw_mean = rw_mean / window_size;
+
+			//Reset
+			upper_sum = 0, lower_sum_0 = 0, lower_sum_1 = 0, zncc_val = 0;
+
+			// Calculate ZNCC using the same window loops
+			for (win_y = -window_y / 2; win_y < window_y / 2; win_y++) {
+				for (win_x = -window_x / 2; win_x < window_x / 2; win_x++) {
+					// Make sure we are inside the image boundries
+					if (win_y + y < 0 || win_y + y >= h || win_x + x < 0 || win_x + x - d < 0 || win_x + x >= w || win_x + x - d >= w) {
+						// Outside of image, go to next iteration
+						continue;
+					}
+					// Get pixel mean differences for both images
+					lw_mean_diff = img_left[(win_y + y) * w + (win_x + x)] - lw_mean;
+					rw_mean_diff = img_right[(win_y + y) * w + (win_x + x - d)] - rw_mean;
+					// Lower Sum calculation
+					lower_sum_0 += lw_mean_diff * lw_mean_diff;
+					lower_sum_1 += rw_mean_diff * rw_mean_diff;
+					// Upper Sum calculation
+					upper_sum += lw_mean_diff * rw_mean_diff;
+				}
+			}
+			// Calculating the ZNCC value with upper and lower sum
+			zncc_val = upper_sum / (sqrt(lower_sum_0) * sqrt(lower_sum_1));
+			// Check if maximum sum and best disparity should be updated based on current zncc value
+			if (zncc_val > max_sum) {
+				best_disparity = d;
+				max_sum = zncc_val;
+			}
 		}
+		// Add resulting best disparity value to the disparity map
+		disparity_map[y * w + x] = abs(best_disparity); // Use absolute value of the disparity
 	}
+
 	StopTimer(&timer, "ZNCC calculated");
 	return disparity_map;
 }
