@@ -123,8 +123,7 @@ int main() {
 	int min_disparity = 0;
 	int max_disparity = 65;
 	int neg_max_disparity = max_disparity * -1;
-	size_t global_size[] = { new_w, new_h };
-	size_t local_size[] = { 1, 1 };
+	
 	// Create Kernel
 	kernel = createKernel(context, device_id, KERNEL_CALCZNCC, (const char**)&calc_zncc_src.source_str, (const size_t*)&calc_zncc_src.source_size);
 	if (kernel == NULL) return 1;
@@ -138,6 +137,17 @@ int main() {
 	cl_mem dmap1_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
 
+
+	/*
+	* NOTES FROM OPENCL PDF
+	* -Vectorizing code improves memory bandwidth and provides better coalescing of memory access (pp.99)
+	* ->Done with vector data types (instead of scalar)
+	* "Vectorization in OpenCL" - https://cs.anu.edu.au/courses/acceleratorsHPC/slides/OpenCLVectorization.pdf
+	* "OpenCL When to use global, private, local, constant address spaces" - https://stackoverflow.com/questions/45426212/opencl-when-to-use-global-private-local-constant-address-spaces
+	* ->Use local when all local workers access global memory
+	* https://stackoverflow.com/questions/18217512/do-global-work-size-and-local-work-size-have-any-effect-on-application-logic
+	*/
+	
 	// im0 left + im1 right parameters
 	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &im0_gray_cl);
 	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im1_gray_cl);
@@ -148,11 +158,15 @@ int main() {
 	err_num |= clSetKernelArg(kernel, 6, sizeof(int), &max_disparity);
 	if (!errorCheck(err_num)) return 1;
 	// Run the kernel
+	size_t global_size[] = { new_w, new_h, };
+	size_t local_size[] = { 1, 1 }; 
+
 	dmap0 = executeBufferKernel(cmd_q, kernel, global_size, local_size, new_w, new_h, dmap0_cl);
 	// Save the result
 	WriteImage(dmap0, "imgs/im0_zncc.png", new_w, new_h, LCT_GREY, 8);
 
 	printf("\n");
+	
 
 	// Free kernel source char pointers
 	free(resize_grayscale_src.source_str);
