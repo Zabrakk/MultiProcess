@@ -7,7 +7,8 @@ __kernel void calc_zncc(__global const unsigned char* img_left, __global const u
 	int y = get_global_id(1);
 	
 	int window_y = 13, window_x = 11;
-	int win_y, win_x;
+	int window_size = window_y * window_x;
+	int d, win_y, win_x;
 	
 	float lw_mean, rw_mean; // Left and right image mean
 	float lw_mean_diff, rw_mean_diff; // Pixel difference from the mean
@@ -21,7 +22,7 @@ __kernel void calc_zncc(__global const unsigned char* img_left, __global const u
 		if (y-window_y/2 < 0 || window_y/2 + y >= h || x-window_x/2 < 0 || window_x/2 + x >= w) return;
 	}
 	
-	for (int d = min_disparity; d < max_disparity; d++) { // Loop to maximum disparity value
+	for (d = min_disparity; d < max_disparity; d++) { // Loop to maximum disparity value
 		// Reset
 		lw_mean = 0, rw_mean = 0;
 		// Mean for each window. Based on the equation, window_x & window_y should be divided by 2
@@ -33,8 +34,8 @@ __kernel void calc_zncc(__global const unsigned char* img_left, __global const u
 			}
 		}
 		// Calculate the window means by dividing summed values with the window's size
-		lw_mean = lw_mean / window_y*window_x;
-		rw_mean = rw_mean / window_y*window_x;
+		lw_mean = lw_mean / window_size;
+		rw_mean = rw_mean / window_size;
 
 		//Reset
 		upper_sum = 0, lower_sum_0 = 0, lower_sum_1 = 0, zncc_val = 0;
