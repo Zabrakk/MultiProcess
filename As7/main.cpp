@@ -46,11 +46,9 @@ int main() {
 	printf("Loadng Kernel sources from .cl files\n");
 	if(!loadKernel(KERNEL_RESIZE_GRAYSCALE_FILE_NAME, &resize_grayscale_src));
 	if(!loadKernel(KERNEL_CALCZNCC_FILE_NAME, &calc_zncc_src));
-	/*
 	if(!loadKernel(KERNEL_CROSS_CHECK_FILE_NAME, &cross_check_src));
 	if(!loadKernel(KERNEL_OCCLUSION_FILL_FILE_NAME, &occlusion_fill_src));
 	if(!loadKernel(KERNEL_NORMALIZE_FILE_NAME, &normalize_src));
-	*/
 
 	// Device selection + context and command queue creation
 	int err_num;
@@ -156,23 +154,82 @@ int main() {
 	err_num |= clSetKernelArg(kernel, 3, sizeof(int), &min_disparity);
 	err_num |= clSetKernelArg(kernel, 4, sizeof(int), &max_disparity);
 	if (!errorCheck(err_num)) return 1;
-
 	// Run the kernel
 	dmap0 = executeBufferKernel(cmd_q, kernel, global_size, local_size, new_w, new_h, dmap0_cl);
 	// Save the result
 	WriteImage(dmap0, "imgs/im0_zncc.png", new_w, new_h, LCT_GREY, 8);
 	
+	// im1 left + im0 right parameters
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &im1_gray_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im0_gray_cl);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &dmap1_cl);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(int), &neg_max_disparity);
+	err_num |= clSetKernelArg(kernel, 4, sizeof(int), &min_disparity);
+	if (!errorCheck(err_num)) return 1;
+	// Run the kernel
+	dmap0 = executeBufferKernel(cmd_q, kernel, global_size, local_size, new_w, new_h, dmap1_cl);
+	// Save the result
+	WriteImage(dmap0, "imgs/im1_zncc.png", new_w, new_h, LCT_GREY, 8);
+
 	printf("\n");
 	
+	//
+	// CrossCheck
+	//
+	std::vector<unsigned char> cross(new_w * new_h);
+	unsigned int threshold = 3;
+	// Create Kernel
+	kernel = createKernel(context, device_id, KERNEL_CROSS_CHECK, (const char**)&cross_check_src.source_str, (const size_t*)&cross_check_src.source_size);
+	if (kernel == NULL) return 1;
+
+	// Create Buffers for the vector
+	cl_mem cross_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
+	if (!errorCheck(err_num)) return 1;
+
+	// Give parameters to Kernel
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &dmap0_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &dmap1_cl);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &cross_cl);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &new_w);
+	err_num |= clSetKernelArg(kernel, 4, sizeof(unsigned int), &new_h);
+	err_num |= clSetKernelArg(kernel, 5, sizeof(unsigned int), &threshold);
+	if (!errorCheck(err_num)) return 1;
+	// Execute the Kernel
+	printf("Executing the CrossCheck Kernel\n");
+	cross = executeBufferKernel(cmd_q, kernel, global_size, local_size, new_w, new_h, cross_cl);
+	WriteImage(cross, "imgs/cross_check.png", new_w, new_h, LCT_GREY, 8);
+	printf("\n");
+
+	//
+	// Occlusion Fill
+	//
+	std::vector<unsigned char> fill(new_w * new_h);
+	// Create Kernel
+	kernel = createKernel(context, device_id, KERNEL_OCCLUSION_FILL, (const char**)&occlusion_fill_src.source_str, (const size_t*)&occlusion_fill_src.source_size);
+	if (kernel == NULL) return 1;
+
+	// Create Buffers for the vectors
+	cl_mem fill_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
+	if (!errorCheck(err_num)) return 1;
+
+	// Give parameters to Kernel
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &cross_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &fill_cl);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &new_w);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &new_h);
+	if (!errorCheck(err_num)) return 1;
+	// Execute the Kernel
+	printf("Executing the Occlusion Fill Kernel\n");
+	fill = executeBufferKernel(cmd_q, kernel, global_size, local_size, new_w, new_h, fill_cl);
+	WriteImage(fill, "imgs/occlusion_fill.png", new_w, new_h, LCT_GREY, 8);
+	printf("\n");
 
 	// Free kernel source char pointers
 	free(resize_grayscale_src.source_str);
 	free(calc_zncc_src.source_str);
-	/*
 	free(cross_check_src.source_str);
 	free(occlusion_fill_src.source_str);
 	free(normalize_src.source_str);
-	*/
 
 	printf("DONE!\n");
 	getchar();
