@@ -71,7 +71,7 @@ int main() {
 
 	// 2D image objects for the result of resize + grayscale
 	printf("Creating 2D grey image objects for the resized and grayscaled im0 and im1\n");
-	cl_mem im0_gray_cl = clCreateImage2D(context, CL_MEM_READ_WRITE, &getGrayImageFormat(), new_w, new_h, 0, NULL, &err_num);
+	cl_mem im0_gray_cl = clCreateImage2D(context, CL_MEM_WRITE_ONLY, &getGrayImageFormat(), new_w, new_h, 0, NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
 	cl_mem im1_gray_cl = clCreateImage2D(context, CL_MEM_WRITE_ONLY, &getGrayImageFormat(), new_w, new_h, 0, NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
@@ -91,7 +91,7 @@ int main() {
 	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im0_gray_cl);
 	if (!errorCheck(err_num)) return 1;
 	// Execute the kernel
-	im0_gray = executeGrayscaleKernel(cmd_q, kernel, new_w, new_h, im0_gray_cl);
+	im0_gray = executeImageKernel(cmd_q, kernel, new_w, new_h, im0_gray_cl);
 	// Save result
 	WriteImage(im0_gray, "imgs/im0_grey.png", new_w, new_h, LCT_GREY, 8);
 	
@@ -101,7 +101,7 @@ int main() {
 	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im1_gray_cl);
 	if (!errorCheck(err_num)) return 1;
 	// Execute the kernel
-	im1_gray = executeGrayscaleKernel(cmd_q, kernel, new_w, new_h, im1_gray_cl);
+	im1_gray = executeImageKernel(cmd_q, kernel, new_w, new_h, im1_gray_cl);
 	// Save result
 	WriteImage(im1_gray, "imgs/im1_grey.png", new_w, new_h, LCT_GREY, 8);
 	printf("\n");
@@ -109,8 +109,6 @@ int main() {
 	// Free the unnecessary image objects from memory
 	err_num = clReleaseMemObject(im0_cl);
 	err_num |= clReleaseMemObject(im1_cl);
-	err_num |= clReleaseMemObject(im0_gray_cl);
-	err_num |= clReleaseMemObject(im1_gray_cl);
 	if (!errorCheck(err_num)) return 1;
 	FreeImageVector(im0);
 	FreeImageVector(im1);
@@ -123,11 +121,15 @@ int main() {
 	int min_disparity = 0;
 	int max_disparity = 65;
 	int neg_max_disparity = max_disparity * -1;
+	int window_x = 11, window_y = 13;
+	size_t global_size[] = { new_w, new_h, };
+	size_t local_size[] = { 1, 1 };
 	
 	// Create Kernel
 	kernel = createKernel(context, device_id, KERNEL_CALCZNCC, (const char**)&calc_zncc_src.source_str, (const size_t*)&calc_zncc_src.source_size);
 	if (kernel == NULL) return 1;
-	// Create Buffers for the vectors
+
+	// Create memory objects
 	im0_gray_cl = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, new_w * new_h * sizeof(unsigned char), &im0_gray[0], &err_num);
 	if (!errorCheck(err_num)) return 1;
 	im1_gray_cl = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, new_w * new_h * sizeof(unsigned char), &im1_gray[0], &err_num);
@@ -136,7 +138,6 @@ int main() {
 	if (!errorCheck(err_num)) return 1;
 	cl_mem dmap1_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);
 	if (!errorCheck(err_num)) return 1;
-
 
 	/*
 	* NOTES FROM OPENCL PDF
@@ -152,19 +153,15 @@ int main() {
 	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &im0_gray_cl);
 	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &im1_gray_cl);
 	err_num |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &dmap0_cl);
-	err_num |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &new_w);
-	err_num |= clSetKernelArg(kernel, 4, sizeof(unsigned int), &new_h);
-	err_num |= clSetKernelArg(kernel, 5, sizeof(int), &min_disparity);
-	err_num |= clSetKernelArg(kernel, 6, sizeof(int), &max_disparity);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(int), &min_disparity);
+	err_num |= clSetKernelArg(kernel, 4, sizeof(int), &max_disparity);
 	if (!errorCheck(err_num)) return 1;
-	// Run the kernel
-	size_t global_size[] = { new_w, new_h, };
-	size_t local_size[] = { 1, 1 }; 
 
+	// Run the kernel
 	dmap0 = executeBufferKernel(cmd_q, kernel, global_size, local_size, new_w, new_h, dmap0_cl);
 	// Save the result
 	WriteImage(dmap0, "imgs/im0_zncc.png", new_w, new_h, LCT_GREY, 8);
-
+	
 	printf("\n");
 	
 

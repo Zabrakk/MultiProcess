@@ -1,16 +1,11 @@
-__kernel void calc_zncc(__global const unsigned char* img_left, 
-						__global const unsigned char* img_right,
-						__global unsigned char* dst,
-						int min_disparity, int max_disparity) {
+__kernel void calc_zncc(__global const unsigned char* img_left, __global const unsigned char* img_right, __global unsigned char* dst, unsigned int w, unsigned int h, int min_disparity, int max_disparity) {
 	// Calculates ZNCC between two given images
 	
 	// Previously took 1525.946368 milliseconds
-	// For some reason having more varaibles inside the function makes this faster
 	
 	int x = get_global_id(0);
 	int y = get_global_id(1);
 	
-	int w = 735, h = 504;
 	int window_y = 13, window_x = 11;
 	int window_size = window_y * window_x;
 	int d, win_y, win_x;
@@ -22,9 +17,10 @@ __kernel void calc_zncc(__global const unsigned char* img_left,
 	
 	max_sum = -1; // Start with a small number, so values can update
 	best_disparity = max_disparity;
-	
-	// Check that we stay inside the image boundaries
-	if (y-window_y/2 < 0 || window_y/2 + y >= h || x-window_x/2 < 0 || window_x/2 + x >= w) return;
+
+	for (int d = min_disparity; d < max_disparity; d++) {
+		if (y-window_y/2 < 0 || window_y/2 + y >= h || x-window_x/2 < 0 || window_x/2 + x >= w) return;
+	}
 	
 	for (d = min_disparity; d < max_disparity; d++) { // Loop to maximum disparity value
 		// Reset

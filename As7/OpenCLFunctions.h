@@ -83,7 +83,7 @@ cl_image_format getGrayImageFormat();
 * \param out_cl OpenCL mem object for the output image
 * \return The resulting image
 */
-std::vector<unsigned char> executeGrayscaleKernel(cl_command_queue cmd_q, cl_kernel kernel, unsigned new_w, unsigned new_h, cl_mem out_cl);
+std::vector<unsigned char> executeImageKernel(cl_command_queue cmd_q, cl_kernel kernel, unsigned new_w, unsigned new_h, cl_mem out_cl);
 
 
 std::vector<unsigned char> executeBufferKernel(cl_command_queue cmd_q, cl_kernel kernel, size_t global_size[], size_t local_size[], unsigned new_w, unsigned new_h, cl_mem out_cl);

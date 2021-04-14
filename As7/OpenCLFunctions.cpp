@@ -108,14 +108,14 @@ cl_kernel createKernel(cl_context context, cl_device_id device_id, char* kernel_
 	err_num = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
 	//Print logs if build failed
 	if (err_num == CL_BUILD_PROGRAM_FAILURE) {
-		size_t log_size;
+		size_t log_size = 0;
 		clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
 		// Allocate memory for the log
 		char* log = (char*)malloc(log_size);
 		// Get the log
 		clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
 		// Print the log
-		printf("%s\n", log);
+		printf("LOG: %s\n", log);
 		// Free after print
 		free(log);
 	}
@@ -251,7 +251,7 @@ cl_image_format getGrayImageFormat() {
 	return format_gray;
 }
 
-std::vector<unsigned char> executeGrayscaleKernel(cl_command_queue cmd_q, cl_kernel kernel, unsigned new_w, unsigned new_h, cl_mem out_cl) {
+std::vector<unsigned char> executeImageKernel(cl_command_queue cmd_q, cl_kernel kernel, unsigned new_w, unsigned new_h, cl_mem out_cl) {
 	cl_event event;
 	size_t global_work_size[] = { new_w, new_h };
 	size_t local_work_size[] = { 1, 1 };
