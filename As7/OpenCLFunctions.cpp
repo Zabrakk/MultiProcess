@@ -295,6 +295,9 @@ std::vector<unsigned char> executeBufferKernel(cl_command_queue cmd_q, cl_kernel
 	// Get the resulting  image
 	err_num = clEnqueueReadBuffer(cmd_q, out_cl, CL_TRUE, 0, new_w * new_h * sizeof(unsigned char), &out[0], 0, NULL, NULL);
 	if (!errorCheck(err_num)) return out;
+	// Free the event
+	err_num = clReleaseEvent(event);
+	if (!errorCheck(err_num)) return out;
 	// Return result
 	return out;
 }

@@ -1,5 +1,6 @@
 #include <vector>
 #include <math.h>
+#include <algorithm>
 #include "lodepng.h"
 #include "ImageFunctions.h"
 #include "OpenCLFunctions.h"
@@ -167,9 +168,9 @@ int main() {
 	err_num |= clSetKernelArg(kernel, 4, sizeof(int), &min_disparity);
 	if (!errorCheck(err_num)) return 1;
 	// Run the kernel
-	dmap0 = executeBufferKernel(cmd_q, kernel, global_size, local_size, new_w, new_h, dmap1_cl);
+	dmap1 = executeBufferKernel(cmd_q, kernel, global_size, local_size, new_w, new_h, dmap1_cl);
 	// Save the result
-	WriteImage(dmap0, "imgs/im1_zncc.png", new_w, new_h, LCT_GREY, 8);
+	WriteImage(dmap1, "imgs/im1_zncc.png", new_w, new_h, LCT_GREY, 8);
 
 	printf("\n");
 	
@@ -224,12 +225,90 @@ int main() {
 	WriteImage(fill, "imgs/occlusion_fill.png", new_w, new_h, LCT_GREY, 8);
 	printf("\n");
 
-	// Free kernel source char pointers
+	//
+	// Normalize the images
+	//
+	// Create Kernel
+	kernel = createKernel(context, device_id, KERNEL_NORMALIZE, (const char**)&normalize_src.source_str, (const size_t*)&normalize_src.source_size);
+	// Initialize
+	int min, max;
+	cl_mem dmap0_norm = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);;
+	cl_mem dmap1_norm = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);;
+	cl_mem cross_norm = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);;
+	cl_mem fill_norm = clCreateBuffer(context, CL_MEM_READ_WRITE, new_w * new_h * sizeof(unsigned char), NULL, &err_num);;
+	// dmap0
+	min = *std::min_element(dmap0.begin(), dmap0.end());
+	max = *std::max_element(dmap0.begin(), dmap0.end());
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &dmap0_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &dmap0_norm);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &new_w);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(int), &min);
+	err_num |= clSetKernelArg(kernel, 4, sizeof(int), &max);
+	printf("Normalizing dmap0");
+	dmap0 = executeBufferKernel(cmd_q, kernel, global_size, local_size, new_w, new_h, dmap0_norm);
+	WriteImage(dmap0, "imgs/im0_zncc_norm.png", new_w, new_h, LCT_GREY, 8);
+	// dmap1
+	min = *std::min_element(dmap1.begin(), dmap1.end());
+	max = *std::max_element(dmap1.begin(), dmap1.end());
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &dmap1_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &dmap1_norm);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &new_w);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(int), &min);
+	err_num |= clSetKernelArg(kernel, 4, sizeof(int), &max);
+	printf("Normalizing dmap1");
+	dmap1 = executeBufferKernel(cmd_q, kernel, global_size, local_size, new_w, new_h, dmap1_norm);
+	WriteImage(dmap1, "imgs/im1_zncc_norm.png", new_w, new_h, LCT_GREY, 8);
+	// Cross Check
+	min = *std::min_element(cross.begin(), cross.end());
+	max = *std::max_element(cross.begin(), cross.end());
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &cross_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &cross_norm);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &new_w);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(int), &min);
+	err_num |= clSetKernelArg(kernel, 4, sizeof(int), &max);
+	printf("Normalizing Cross Check");
+	cross = executeBufferKernel(cmd_q, kernel, global_size, local_size, new_w, new_h, cross_norm);
+	WriteImage(cross, "imgs/cross_check_norm.png", new_w, new_h, LCT_GREY, 8);
+	// Occlusion Fill
+	min = *std::min_element(fill.begin(), fill.end());
+	max = *std::max_element(fill.begin(), fill.end());
+	err_num = clSetKernelArg(kernel, 0, sizeof(cl_mem), &fill_cl);
+	err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &fill_norm);
+	err_num |= clSetKernelArg(kernel, 2, sizeof(unsigned int), &new_w);
+	err_num |= clSetKernelArg(kernel, 3, sizeof(int), &min);
+	err_num |= clSetKernelArg(kernel, 4, sizeof(int), &max);
+	printf("Normalizing Occlusion Fill");
+	fill = executeBufferKernel(cmd_q, kernel, global_size, local_size, new_w, new_h, fill_norm);
+	WriteImage(fill, "imgs/occlusion_fill_norm.png", new_w, new_h, LCT_GREY, 8);
+
+	//
+	// Free Memory
+	//
 	free(resize_grayscale_src.source_str);
 	free(calc_zncc_src.source_str);
 	free(cross_check_src.source_str);
 	free(occlusion_fill_src.source_str);
 	free(normalize_src.source_str);
+
+	err_num = clFlush(cmd_q);
+	err_num |= clFinish(cmd_q);
+	err_num |= clReleaseKernel(kernel);
+	err_num |= clReleaseMemObject(im0_gray_cl);
+	err_num |= clReleaseMemObject(im1_gray_cl);
+	err_num |= clReleaseMemObject(dmap0_cl);
+	err_num |= clReleaseMemObject(dmap1_cl);
+	err_num |= clReleaseMemObject(cross_cl);
+	err_num |= clReleaseMemObject(fill_cl);
+	err_num |= clReleaseDevice(device_id);
+	err_num |= clReleaseCommandQueue(cmd_q);
+	err_num |= clReleaseContext(context);
+
+	FreeImageVector(im0_gray);
+	FreeImageVector(im1_gray);
+	FreeImageVector(dmap0);
+	FreeImageVector(dmap1);
+	FreeImageVector(cross);
+	FreeImageVector(fill);
 
 	printf("DONE!\n");
 	getchar();
