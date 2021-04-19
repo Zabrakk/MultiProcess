@@ -272,6 +272,9 @@ std::vector<unsigned char> executeImageKernel(cl_command_queue cmd_q, cl_kernel 
 	// Get the resulting grayscaled image
 	err_num = clEnqueueReadImage(cmd_q, out_cl, CL_TRUE, origin, region, 0, 0, &out[0], 0, NULL, NULL);
 	if (!errorCheck(err_num)) return out;
+	// Free the event
+	err_num = clReleaseEvent(event);
+	if (!errorCheck(err_num)) return out;
 	// Return result
 	return out;
 }
